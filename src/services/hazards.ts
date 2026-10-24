@@ -8,9 +8,9 @@
  */
 
 import type {
-  Hazard,
-  HazardType,
-  StoredHazardType,
+    Hazard,
+    HazardType,
+    StoredHazardType,
 } from '@/constants/hazards';
 import { storedHazardLabel } from '@/constants/hazards';
 import { ApiError, apiFetch, apiUrl } from '@/services/api';
@@ -20,6 +20,8 @@ type HazardBody = {
   id: string;
   latitude: number;
   longitude: number;
+  floor: number | null;
+  position: { x: number; y: number } | null;
   status: 'open' | 'resolved';
   created_at: string;
   severity_score: number;
@@ -84,6 +86,10 @@ export type TextReportInput = {
   severity: number; // 1–10 pin scale
   latitude: number;
   longitude: number;
+  /** Floor the pin sits on (null when outside / no plan). */
+  floor?: number | null;
+  /** Normalized pin position on the floor plan (null when none). */
+  position?: { x: number; y: number } | null;
 };
 
 /** A hazard freshly opened by a manual report, ready for the local store. */
@@ -123,6 +129,9 @@ export async function submitTextReport(input: TextReportInput): Promise<Submitte
       severity_score: severityScore,
       latitude: input.latitude,
       longitude: input.longitude,
+      floor: input.floor ?? null,
+      position_x: input.position?.x ?? null,
+      position_y: input.position?.y ?? null,
     }),
   });
   if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
@@ -148,9 +157,9 @@ function toHazard(row: HazardBody): Hazard {
     severityScore: row.severity_score,
     hazardType: null,
     description: 'Reported hazard',
-    location: 'inside',
-    floor: null,
-    position: null,
+    location: row.floor !== null ? 'inside' : 'outside',
+    floor: row.floor,
+    position: row.position,
     method: 'manual',
     photoUri: null,
     createdAt: Number.isNaN(createdAt) ? Date.now() : createdAt,
@@ -183,10 +192,20 @@ function parseHazard(body: unknown): HazardBody | null {
   ) {
     return null;
   }
+  const floor = typeof row.floor === 'number' ? row.floor : null;
+  let position: { x: number; y: number } | null = null;
+  if (row.position && typeof row.position === 'object') {
+    const p = row.position as Record<string, unknown>;
+    if (typeof p.x === 'number' && typeof p.y === 'number') {
+      position = { x: p.x, y: p.y };
+    }
+  }
   return {
     id: row.id,
     latitude: row.latitude,
     longitude: row.longitude,
+    floor,
+    position,
     status: row.status,
     created_at: row.created_at,
     severity_score: row.severity_score,

@@ -242,6 +242,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
         severity,
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
+        floor: location === 'inside' ? floor : null,
+        position: location === 'inside' ? position : null,
       });
       addHazard({
         id: stored.hazardId,

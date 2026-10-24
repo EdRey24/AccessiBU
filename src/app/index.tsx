@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CampusMap } from '@/components/campus-map';
@@ -18,7 +18,7 @@ type Screen = { kind: 'map' } | { kind: 'floor'; floor: number };
 export default function HomeScreen() {
   const theme = useTheme();
   const { signOut } = useSession();
-  const { hazards } = useHazards();
+  const { hazards, refresh, loading } = useHazards();
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [reportOpen, setReportOpen] = useState(false);
   const [floorPickerOpen, setFloorPickerOpen] = useState(false);
@@ -83,14 +83,29 @@ export default function HomeScreen() {
 
       {/* Bottom bar */}
       <View style={[styles.bottomBar, { borderColor: theme.border }]}>
-        <View style={styles.reportsSummary}>
-          <ThemedText type="smallBold">Active reports</ThemedText>
+        <Pressable
+          style={styles.reportsSummary}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh reports"
+          onPress={() => {
+            void refresh();
+          }}>
+          <View style={styles.reportsHeader}>
+            <ThemedText type="smallBold">Active reports</ThemedText>
+            {loading ? (
+              <ActivityIndicator size="small" color={BU.red} />
+            ) : (
+              <ThemedText type="small" themeColor="textSecondary">
+                ↻
+              </ThemedText>
+            )}
+          </View>
           <ThemedText type="small" themeColor="textSecondary">
             {insideCount === 0
-              ? 'No active hazards reported.'
-              : `${insideCount} report${insideCount === 1 ? '' : 's'} on CDS.`}
+              ? 'No active hazards reported. Tap to refresh.'
+              : `${insideCount} report${insideCount === 1 ? '' : 's'} on CDS. Tap to refresh.`}
           </ThemedText>
-        </View>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Report hazard"
@@ -261,6 +276,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   reportsSummary: { flex: 1, gap: 2 },
+  reportsHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   fab: {
     backgroundColor: BU.red,
     borderRadius: Spacing.five,

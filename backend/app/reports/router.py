@@ -88,6 +88,9 @@ def _resolve_hazard(body: TextReportSubmit, db: Session) -> HazardRow:
     hazard = HazardRow(
         latitude=body.latitude,
         longitude=body.longitude,
+        floor=body.floor,
+        position_x=body.position_x,
+        position_y=body.position_y,
         status=HazardStatus.OPEN,
         severity_score=body.severity_score,
     )
