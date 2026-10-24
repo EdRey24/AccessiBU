@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { Hazard } from '@/constants/hazards';
-import { FLOOR_PLAN_SIZE, floorFeatures } from '@/constants/hazards';
+import { floorFeatures, floorPlanSize } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -18,6 +18,8 @@ type FloorPlanProps = {
   onPinPress?: (hazard: Hazard) => void;
   /** Show staircase/elevator feature markers used for severity context. */
   showFeatures?: boolean;
+  /** "You are here" dot from GPS, normalized (0-1). Null = unknown. */
+  userDot?: Pos | null;
   caption?: string;
 };
 
@@ -37,6 +39,7 @@ export function FloorPlan({
   onPlace,
   onPinPress,
   showFeatures,
+  userDot = null,
   caption,
 }: FloorPlanProps) {
   const theme = useTheme();
@@ -45,13 +48,24 @@ export function FloorPlan({
   const draggingRef = useRef(false);
   const placeable = !!onPlace;
 
+  // Keep `size` exactly in sync with the rendered box via ResizeObserver, so
+  // the size used to POSITION pins always matches the box taps are measured
+  // against (a stale/too-short height was placing pins lower than tapped).
   const measure = useCallback(() => {
     const el = wrapRef.current;
-    if (el) setSize({ w: el.clientWidth, h: el.clientHeight });
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setSize({ w: r.width, h: r.height });
   }, []);
 
   useEffect(() => {
     measure();
+    const el = wrapRef.current;
+    if (el && typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => measure());
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, [measure]);
@@ -83,7 +97,7 @@ export function FloorPlan({
   const px = (pos: Pos) => ({ left: pos.x * size.w - PIN / 2, top: pos.y * size.h - PIN / 2 });
 
   return (
-    <View style={[styles.plan, { aspectRatio: FLOOR_PLAN_SIZE.width / FLOOR_PLAN_SIZE.height, borderColor: theme.border }]}>
+    <View style={[styles.plan, { aspectRatio: floorPlanSize(floor).width / floorPlanSize(floor).height, borderColor: theme.border }]}>
       <div
         ref={wrapRef}
         onPointerDown={placeable ? handlePointerDown : undefined}
@@ -128,6 +142,16 @@ export function FloorPlan({
                 </View>
               </View>
             ))}
+
+        {/* Live "you are here" dot (GPS, approximate) */}
+        {size.w > 0 && userDot && (
+          <View
+            style={[styles.userWrap, { left: userDot.x * size.w - 8, top: userDot.y * size.h - 8 }]}
+            pointerEvents="none">
+            <View style={styles.userHalo} />
+            <View style={styles.userDot} />
+          </View>
+        )}
 
         {/* Draft pin (draggable) */}
         {size.w > 0 && draftPin && (
@@ -187,6 +211,23 @@ const styles = StyleSheet.create({
     borderRadius: PIN,
     backgroundColor: BU.red,
     opacity: 0.18,
+  },
+  userWrap: { position: 'absolute', width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
+  userHalo: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#2F7CF6',
+    opacity: 0.22,
+  },
+  userDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2F7CF6',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   feature: { position: 'absolute', width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },
   featureIcon: { fontSize: 16 },

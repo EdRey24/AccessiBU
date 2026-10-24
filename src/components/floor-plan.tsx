@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import type { Hazard } from '@/constants/hazards';
-import { FLOOR_PLAN_SIZE, floorFeatures } from '@/constants/hazards';
+import { floorFeatures, floorPlanSize } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -25,6 +25,8 @@ type FloorPlanProps = {
   onPlace?: (pos: Pos) => void;
   onPinPress?: (hazard: Hazard) => void;
   showFeatures?: boolean;
+  /** "You are here" dot from GPS, normalized (0-1). Null = unknown. */
+  userDot?: Pos | null;
   caption?: string;
 };
 
@@ -43,6 +45,7 @@ export function FloorPlan({
   onPlace,
   onPinPress,
   showFeatures,
+  userDot = null,
   caption,
 }: FloorPlanProps) {
   const theme = useTheme();
@@ -85,7 +88,7 @@ export function FloorPlan({
       }}
       style={[
         styles.plan,
-        { aspectRatio: FLOOR_PLAN_SIZE.width / FLOOR_PLAN_SIZE.height, borderColor: theme.border },
+        { aspectRatio: floorPlanSize(floor).width / floorPlanSize(floor).height, borderColor: theme.border },
       ]}>
       {planImage ? (
         <Image
@@ -131,6 +134,14 @@ export function FloorPlan({
                 </View>
               </Pressable>
             ))}
+
+          {/* Live "you are here" dot (GPS, approximate) */}
+          {userDot && (
+            <View pointerEvents="none" style={[styles.userWrap, { left: userDot.x * w - 8, top: userDot.y * h - 8 }]}>
+              <View style={styles.userHalo} />
+              <View style={styles.userDot} />
+            </View>
+          )}
 
           {/* Draft pin */}
           {draftPin && (
@@ -192,6 +203,23 @@ const styles = StyleSheet.create({
     borderRadius: PIN,
     backgroundColor: BU.red,
     opacity: 0.18,
+  },
+  userWrap: { position: 'absolute', width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
+  userHalo: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#2F7CF6',
+    opacity: 0.22,
+  },
+  userDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2F7CF6',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   feature: { position: 'absolute', width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },
   featureIcon: { fontSize: 16 },

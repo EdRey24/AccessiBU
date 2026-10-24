@@ -7,11 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import {
     CDS_FLOORS,
-    FLOOR_PLAN_SIZE,
     floorLabel,
     floorPlanImage,
+    floorPlanSize,
     type FeatureKind,
-    type FloorFeature,
+    type FloorFeature
 } from '@/constants/hazards';
 import { BU, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -164,7 +164,7 @@ export default function FeatureCaptureTool() {
         <View
           style={[
             styles.plan,
-            { aspectRatio: FLOOR_PLAN_SIZE.width / FLOOR_PLAN_SIZE.height, borderColor: theme.border },
+            { aspectRatio: floorPlanSize(floor).width / floorPlanSize(floor).height, borderColor: theme.border },
           ]}>
           {Platform.OS === 'web' ? (
             <div

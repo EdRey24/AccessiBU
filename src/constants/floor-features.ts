@@ -25,12 +25,12 @@ export type FloorFeature = {
   y: number;
 };
 
-/** Baseline used for any floor not yet digitized (central service core). */
-export const CDS_CORE_FEATURES: FloorFeature[] = [
-  { kind: 'elevator', label: 'Elevator bank', x: 0.47, y: 0.5 },
-  { kind: 'stair', label: 'North stair', x: 0.34, y: 0.42 },
-  { kind: 'stair', label: 'South stair', x: 0.34, y: 0.62 },
-];
+/**
+ * Baseline for floors not yet digitized. Empty so no placeholder markers show
+ * on the plan — real stair/elevator positions are captured per-floor with the
+ * dev tool and go into FLOOR_FEATURES below.
+ */
+export const CDS_CORE_FEATURES: FloorFeature[] = [];
 
 /**
  * Digitized features keyed by floor value. Fill these in with the dev tool.

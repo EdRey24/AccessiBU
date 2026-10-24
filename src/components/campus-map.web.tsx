@@ -115,6 +115,22 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
         });
         mapRef.current = map;
 
+        // Live user-location dot + control (like Google Maps). Keep the 3D
+        // tilt — the control otherwise flattens to a top-down view when it
+        // flies to the user, so we restore pitch/bearing after it locates.
+        const geolocate = new mapboxgl.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: true,
+          showUserHeading: true,
+        });
+        map.addControl(geolocate, 'top-right');
+        geolocate.on('geolocate', () => {
+          // Re-apply the 3D camera the next tick (after the control's easeTo).
+          setTimeout(() => {
+            map.easeTo({ pitch: 55, bearing: 18, duration: 600 });
+          }, 50);
+        });
+
         map.on('load', () => {
           // CDS chip marker — anchored bottom so the bubble sits above the point.
           const chipEl = makeChipEl(count, onSelectBuilding);

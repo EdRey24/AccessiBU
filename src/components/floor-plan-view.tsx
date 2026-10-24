@@ -4,6 +4,7 @@ import type { Hazard } from '@/constants/hazards';
 import { floorLabel, floorPlanImage } from '@/constants/hazards';
 import { BU, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useUserLocation } from '@/hooks/use-user-location';
 
 import { FloorPlan } from './floor-plan';
 import { ThemedText } from './themed-text';
@@ -23,6 +24,7 @@ type FloorPlanViewProps = {
  */
 export function FloorPlanView({ floor, hazards, onBack, onSelectHazard }: FloorPlanViewProps) {
   const theme = useTheme();
+  const { planXY: userDot } = useUserLocation();
   const floorHazards = hazards.filter(
     (h) => h.location === 'inside' && h.floor === floor && h.position
   );
@@ -54,7 +56,9 @@ export function FloorPlanView({ floor, hazards, onBack, onSelectHazard }: FloorP
         <View style={styles.planWrap}>
           <FloorPlan
             planImage={floorPlanImage(floor)}
+            floor={floor}
             pins={floorHazards}
+            userDot={userDot}
             onPinPress={onSelectHazard}
             caption={floorLabel(floor)}
           />

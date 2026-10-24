@@ -17,10 +17,11 @@ import {
     CDS_FLOORS,
     floorLabel,
     floorPlanImage,
+    gpsToPlanXY,
     isAtCDS,
     type Location as HazardLocation,
     type HazardType,
-    type ReportMethod,
+    type ReportMethod
 } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
@@ -74,6 +75,9 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
 
   const isPhoto = method === 'photo';
   const effectiveType = result ? result.type : manualType;
+  // "You are here" dot: project the user's GPS onto the floor plan (approximate
+  // indoors, so the user still drags the pin to the exact spot).
+  const userDot = coords ? gpsToPlanXY(coords) : null;
 
   const reset = () => {
     setMethod('photo');
@@ -321,6 +325,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                   planImage={floorPlanImage(floor)}
                   floor={floor}
                   draftPin={position}
+                  userDot={userDot}
                   onPlace={(p) => {
                     setPosition(p);
                     // Re-score with the new spatial context if we have a photo.

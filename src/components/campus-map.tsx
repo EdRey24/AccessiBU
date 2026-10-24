@@ -1,4 +1,4 @@
-import Mapbox, { Camera, MapView, MarkerView } from '@rnmapbox/maps';
+import Mapbox, { Camera, LocationPuck, MapView, MarkerView } from '@rnmapbox/maps';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -33,6 +33,8 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
 
   useEffect(() => {
     Mapbox.setTelemetryEnabled(false);
+    // Request location so the live-location puck can render.
+    Mapbox.requestAndroidLocationPermissions?.();
   }, []);
 
   return (
@@ -54,6 +56,9 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
             heading: 20,
           }}
         />
+
+        {/* Live "you are here" location puck */}
+        <LocationPuck puckBearingEnabled puckBearing="heading" pulsing={{ isEnabled: true }} />
 
         {/* CDS hazard-count chip — only while zoomed in */}
         {showChip && (
