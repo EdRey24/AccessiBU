@@ -9,12 +9,20 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app.alerts.models import Alert
+from app.base import Base
 from app.config import get_settings
-from app.models import Base
+from app.hazards.models import Hazard
+from app.members.models import Member
+from app.reports.models import Report
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+for _model in (Alert, Hazard, Member, Report):
+    if _model.__table__.name not in Base.metadata.tables:
+        raise RuntimeError(f"{_model.__tablename__} is not registered")
 
 target_metadata = Base.metadata
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

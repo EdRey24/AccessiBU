@@ -7,10 +7,10 @@ served here.
 
 from fastapi import FastAPI
 
-from app.auth import router as auth_router
+from app.members.router import router as members_router
 
 app = FastAPI(title="AccessiBU")
-app.include_router(auth_router)
+app.include_router(members_router)
 
 
 @app.get("/health")
