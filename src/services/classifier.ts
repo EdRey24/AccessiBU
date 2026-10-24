@@ -30,6 +30,7 @@ import {
   proximityToFeatures,
 } from '@/constants/hazards';
 import { apiFetch, apiUrl } from '@/services/api';
+import { appendPhoto } from '@/services/photo-form';
 
 export type ClassifierResult = {
   type: HazardType;
@@ -53,12 +54,7 @@ export async function classifyHazard(
 
 async function callBackend(photoUri: string, context: SpatialContext): Promise<ClassifierResult> {
   const form = new FormData();
-  // React Native / web both accept this shape for a file part.
-  form.append('image', {
-    uri: photoUri,
-    name: 'hazard.jpg',
-    type: 'image/jpeg',
-  } as any);
+  await appendPhoto(form, photoUri);
   form.append('context', JSON.stringify(context));
 
   const res = await apiFetch('/classify', { method: 'POST', body: form });
