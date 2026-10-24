@@ -3,6 +3,10 @@
  * UI-only for now; a backend will replace the in-memory store later.
  */
 
+import { floorFeatures, type FeatureKind, type FloorFeature } from './floor-features';
+
+export { floorFeatures, type FeatureKind, type FloorFeature };
+
 export type HazardType =
   | 'Spill'
   | 'Broken elevator'
@@ -30,7 +34,7 @@ export type Location = 'inside' | 'outside';
 export type Hazard = {
   id: string;
   type: HazardType;
-  severity: number; // 1-10
+  severity: number; // 1-10, model-assigned
   description: string;
   location: Location;
   floor: number | null; // null when outside
@@ -39,6 +43,13 @@ export type Hazard = {
   method: ReportMethod;
   photoUri: string | null;
   createdAt: number;
+  /**
+   * Resolved spatial context sent to the classifier (pin -> nearest features).
+   * Stored so it's inspectable/exportable for the model team.
+   */
+  spatialContext?: SpatialContext | null;
+  /** How severity was derived, for display + debugging. */
+  severityReason?: string;
 };
 
 /**
@@ -96,6 +107,94 @@ export const FLOOR_PLAN_IMAGES: Record<number, number> = {
 /** Plan image native dimensions (all exports share this size). */
 export const FLOOR_PLAN_SIZE = { width: 1570, height: 1440 };
 
+/**
+ * Spatial reasoning: given a pinned hazard, compute how close it is to the
+ * stair/elevator core so the backend classifier can raise or lower severity.
+ * Feature positions live in ./floor-features (digitized via the dev tool).
+ */
+
+/** Euclidean distance between two normalized points (0-1 space). */
+function normalizedDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+export type ProximityContext = {
+  nearest: FloorFeature | null;
+  /** Normalized distance (0-1) to the nearest feature. */
+  distance: number;
+  /** True when the hazard sits very close to a stair/elevator. */
+  nearCriticalEgress: boolean;
+};
+
+/** Finds the nearest accessibility feature to a pinned hazard position. */
+export function proximityToFeatures(
+  floor: number,
+  pos: { x: number; y: number }
+): ProximityContext {
+  const feats = floorFeatures(floor);
+  let nearest: FloorFeature | null = null;
+  let distance = Infinity;
+  for (const f of feats) {
+    const d = normalizedDistance(pos, f);
+    if (d < distance) {
+      distance = d;
+      nearest = f;
+    }
+  }
+  return {
+    nearest,
+    distance: distance === Infinity ? 1 : distance,
+    nearCriticalEgress: distance <= 0.12,
+  };
+}
+
+/**
+ * The structured spatial context sent to the backend severity classifier.
+ * This is the key handoff: the app resolves the pin against the floor-plan
+ * geometry so the model never has to understand the map — it just reads these
+ * fields and adjusts severity (e.g. nearCriticalEgress -> bump up).
+ */
+export type SpatialContext = {
+  building: 'CDS';
+  floor: number;
+  floorLabel: string;
+  pin: { x: number; y: number };
+  nearestFeature: { kind: FloorFeature['kind']; label: string; distance: number } | null;
+  nearbyFeatures: { kind: FloorFeature['kind']; label: string; distance: number }[];
+  nearCriticalEgress: boolean;
+  /** GPS at capture time (coarse; indoors it only confirms the building). */
+  gps: { latitude: number; longitude: number; accuracy: number | null } | null;
+};
+
+/** Builds the SpatialContext payload for a report. */
+export function buildSpatialContext(
+  floor: number,
+  pin: { x: number; y: number },
+  gps: { latitude: number; longitude: number; accuracy?: number | null } | null
+): SpatialContext {
+  const feats = floorFeatures(floor);
+  const withDist = feats
+    .map((f) => ({ kind: f.kind, label: f.label, distance: normalizedDistance(pin, f) }))
+    .sort((a, b) => a.distance - b.distance);
+  const nearest = withDist[0] ?? null;
+  return {
+    building: 'CDS',
+    floor,
+    floorLabel: floorLabel(floor),
+    pin,
+    nearestFeature: nearest
+      ? { ...nearest, distance: Number(nearest.distance.toFixed(4)) }
+      : null,
+    nearbyFeatures: withDist
+      .filter((f) => f.distance <= 0.25)
+      .map((f) => ({ ...f, distance: Number(f.distance.toFixed(4)) })),
+    nearCriticalEgress: nearest ? nearest.distance <= 0.12 : false,
+    gps: gps
+      ? { latitude: gps.latitude, longitude: gps.longitude, accuracy: gps.accuracy ?? null }
+      : null,
+  };
+}
+
 export function floorPlanImage(floor: number | null): number | undefined {
   if (floor === null) return undefined;
   return FLOOR_PLAN_IMAGES[floor];
@@ -148,29 +247,5 @@ export function floorLabel(floor: number | null): string {
   return CDS_FLOORS.find((f) => f.value === floor)?.label ?? `Floor ${floor}`;
 }
 
-export type AnalysisResult = {
-  type: HazardType;
-  severity: number;
-  description: string;
-};
-
-/**
- * Mock AI photo analysis. Stands in for a vision model (Supabase edge function
- * / OpenAI / etc.) until the backend is wired up. Returns a plausible hazard
- * classification so the report flow is demoable end-to-end. Deterministic-ish
- * via the photo URI so the same shot yields the same result.
- */
-export function analyzeHazardPhoto(photoUri: string | null): Promise<AnalysisResult> {
-  const samples: AnalysisResult[] = [
-    { type: 'Spill', severity: 6, description: 'Liquid spill detected on the floor — slip risk in a walking path.' },
-    { type: 'Wet floor', severity: 4, description: 'Wet floor surface detected; proceed with caution.' },
-    { type: 'Blocked path', severity: 7, description: 'Obstruction blocking an accessible route.' },
-    { type: 'Debris', severity: 5, description: 'Loose debris detected on the ground.' },
-    { type: 'Broken elevator', severity: 8, description: 'Elevator appears out of service — accessibility impact.' },
-    { type: 'Lighting out', severity: 3, description: 'Low lighting / outage detected in this area.' },
-  ];
-  const seed = (photoUri ?? '').length;
-  const pick = samples[seed % samples.length];
-  // Simulate model latency.
-  return new Promise((resolve) => setTimeout(() => resolve(pick), 1400));
-}
+// Classification + severity scoring now lives in src/services/classifier.ts,
+// which calls the backend model with the SpatialContext built above.

@@ -13,11 +13,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-    analyzeHazardPhoto,
+    buildSpatialContext,
     CDS_FLOORS,
     floorLabel,
     floorPlanImage,
-    HAZARD_TYPES,
     isAtCDS,
     type Location as HazardLocation,
     type HazardType,
@@ -26,6 +25,7 @@ import {
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
+import { classifyHazard } from '@/services/classifier';
 
 import { CameraCapture } from './camera-capture';
 import { Dropdown } from './dropdown';
@@ -38,6 +38,7 @@ type ReportHazardModalProps = {
 };
 
 type LocationStatus = 'idle' | 'detecting' | 'at-cds' | 'elsewhere' | 'denied';
+type Coords = { latitude: number; longitude: number; accuracy: number | null };
 
 export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) {
   const theme = useTheme();
@@ -47,28 +48,45 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   const [method, setMethod] = useState<ReportMethod>('photo');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+
   const [analyzing, setAnalyzing] = useState(false);
-  const [analyzed, setAnalyzed] = useState(false);
-  const [type, setType] = useState<HazardType>('Spill');
-  const [severity, setSeverity] = useState(5);
+  // The model result (type, severity, description) — null until classified.
+  const [result, setResult] = useState<{
+    type: HazardType;
+    severity: number;
+    baseSeverity: number;
+    locationBonus: number;
+    description: string;
+    reason: string;
+    fromBackend: boolean;
+  } | null>(null);
+
+  // Manual-report fields (editable only when there's no photo/model result).
+  const [manualType, setManualType] = useState<HazardType>('Spill');
   const [description, setDescription] = useState('');
+
   const [location, setLocation] = useState<HazardLocation>('inside');
   const [locStatus, setLocStatus] = useState<LocationStatus>('idle');
+  const [coords, setCoords] = useState<Coords | null>(null);
   const [floor, setFloor] = useState(12);
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  // Start with a center pin so the user just drags it to the exact spot.
+  const [position, setPosition] = useState<{ x: number; y: number } | null>({ x: 0.5, y: 0.5 });
+
+  const isPhoto = method === 'photo';
+  const effectiveType = result ? result.type : manualType;
 
   const reset = () => {
     setMethod('photo');
     setPhotoUri(null);
     setAnalyzing(false);
-    setAnalyzed(false);
-    setType('Spill');
-    setSeverity(5);
+    setResult(null);
+    setManualType('Spill');
     setDescription('');
     setLocation('inside');
     setLocStatus('idle');
+    setCoords(null);
     setFloor(12);
-    setPosition(null);
+    setPosition({ x: 0.5, y: 0.5 });
   };
 
   const close = () => {
@@ -76,54 +94,86 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     onClose();
   };
 
-  // Auto-detect the building from GPS and set inside/outside CDS.
-  const detectBuilding = async () => {
+  // Detect the building from GPS; also keeps coords for the spatial context.
+  const detectBuilding = async (): Promise<Coords | null> => {
     setLocStatus('detecting');
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setLocStatus('denied');
-        return;
+        return null;
       }
       const pos = await Location.getCurrentPositionAsync({});
-      const atCDS = isAtCDS(pos.coords);
+      const c: Coords = {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy ?? null,
+      };
+      setCoords(c);
+      const atCDS = isAtCDS(c);
       setLocation(atCDS ? 'inside' : 'outside');
       setLocStatus(atCDS ? 'at-cds' : 'elsewhere');
+      return c;
     } catch {
       setLocStatus('denied');
+      return null;
     }
   };
 
-  // After a photo is captured: analyze it, then auto-detect the building.
+  // Run the classifier whenever we have a photo + a pin (so spatial context is
+  // available). Re-runs if the pin or floor changes materially.
+  const runClassifier = async (uri: string | null, gps: Coords | null) => {
+    if (!position) return;
+    setAnalyzing(true);
+    const ctx = buildSpatialContext(floor, position, gps);
+    const r = await classifyHazard(uri, ctx);
+    setResult(r);
+    setAnalyzing(false);
+  };
+
+  // Photo captured -> detect building -> classify with spatial context.
   const handleCapture = async (uri: string) => {
     setPhotoUri(uri);
     setCameraOpen(false);
-    setAnalyzing(true);
-    setAnalyzed(false);
-    const [result] = await Promise.all([analyzeHazardPhoto(uri), detectBuilding()]);
-    setType(result.type);
-    setSeverity(result.severity);
-    setDescription(result.description);
-    setAnalyzing(false);
-    setAnalyzed(true);
+    const gps = await detectBuilding();
+    await runClassifier(uri, gps);
   };
 
-  const canSubmit = !analyzing && (location === 'outside' || position !== null);
+  // Validation. Photo flow needs a model result; manual flow requires the
+  // fields the backend needs (description, floor, pin) since there's no image.
+  const manualValid =
+    description.trim().length > 0 &&
+    (location === 'outside' || (floor !== null && position !== null));
+  const canSubmit =
+    !analyzing &&
+    (isPhoto
+      ? !!result && (location === 'outside' || position !== null)
+      : manualValid);
 
   const submit = () => {
     if (!canSubmit) return;
+    const spatialContext =
+      location === 'inside' && position ? buildSpatialContext(floor, position, coords) : null;
     addHazard({
-      type,
-      severity,
+      type: effectiveType,
+      severity: result ? result.severity : 5,
       description: description.trim(),
       location,
       floor: location === 'inside' ? floor : null,
       position: location === 'inside' ? position : null,
       method,
       photoUri,
+      spatialContext,
+      severityReason: result?.reason,
     });
     close();
   };
+
+  const missingManual: string[] = [];
+  if (!isPhoto) {
+    if (!description.trim()) missingManual.push('description');
+    if (location === 'inside' && !position) missingManual.push('pin');
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
@@ -133,7 +183,6 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
             styles.sheet,
             { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.four },
           ]}>
-          {/* Header */}
           <View style={styles.header}>
             <ThemedText type="subtitle" style={styles.title}>
               Report a hazard
@@ -157,6 +206,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                 active={method === 'photo'}
                 onPress={() => {
                   setMethod('photo');
+                  setResult(null);
                   setCameraOpen(true);
                 }}
               />
@@ -167,7 +217,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                 onPress={() => {
                   setMethod('manual');
                   setPhotoUri(null);
-                  setAnalyzed(false);
+                  setResult(null);
                   detectBuilding();
                 }}
               />
@@ -179,56 +229,45 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
 
             {/* AI analysis status */}
             {analyzing && (
-              <View style={[styles.analyzeBanner, { backgroundColor: theme.backgroundElement }]}>
+              <View style={[styles.banner, { backgroundColor: theme.backgroundElement }]}>
                 <ActivityIndicator color={BU.red} />
-                <ThemedText type="small">Analyzing photo…</ThemedText>
-              </View>
-            )}
-            {analyzed && !analyzing && (
-              <View style={[styles.analyzeBanner, { backgroundColor: theme.backgroundElement }]}>
-                <ThemedText type="smallBold" style={{ color: BU.red }}>
-                  ✓ AI classified
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Review and adjust if needed
-                </ThemedText>
+                <ThemedText type="small">Classifying hazard & scoring severity…</ThemedText>
               </View>
             )}
 
-            {/* Hazard + Severity */}
-            <View style={styles.twoCol}>
-              <View style={styles.col}>
-                <ThemedText type="smallBold" style={styles.label}>
-                  Hazard
-                </ThemedText>
-                <Dropdown
-                  value={type}
-                  onChange={(v) => setType(v)}
-                  options={HAZARD_TYPES.map((t) => ({ value: t, label: t }))}
-                />
-              </View>
-              <View style={styles.col}>
-                <View style={styles.severityHeader}>
-                  <ThemedText type="smallBold" style={styles.label}>
-                    Severity
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {severity}/10
-                  </ThemedText>
-                </View>
-                <SeverityStepper value={severity} onChange={setSeverity} />
-              </View>
-            </View>
-
-            {/* Description */}
+            {/* Hazard type */}
             <ThemedText type="smallBold" style={styles.label}>
-              Description
+              Hazard type
             </ThemedText>
+            {isPhoto ? (
+              <View style={[styles.readonlyField, { borderColor: theme.border }]}>
+                <ThemedText type="default" themeColor={result ? 'text' : 'textSecondary'}>
+                  {result ? result.type : 'Take a photo to classify…'}
+                </ThemedText>
+              </View>
+            ) : (
+              <HazardTypeDropdown value={manualType} onChange={setManualType} />
+            )}
+
+            {/* Severity — model-assigned, read only (photo flow only) */}
+            {isPhoto && <SeverityResult result={result} />}
+
+            {/* Description (required for manual) */}
+            <View style={styles.labelRow}>
+              <ThemedText type="smallBold" style={styles.label}>
+                Description{!isPhoto ? ' *' : ''}
+              </ThemedText>
+              {!isPhoto && !description.trim() && (
+                <ThemedText type="small" style={styles.required}>
+                  required
+                </ThemedText>
+              )}
+            </View>
             <TextInput
               value={description}
               onChangeText={setDescription}
               multiline
-              placeholder="Add any helpful details…"
+              placeholder={isPhoto ? 'Add any extra details (optional)…' : 'Describe the hazard…'}
               placeholderTextColor={theme.textSecondary}
               style={[
                 styles.textArea,
@@ -263,26 +302,34 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
 
             {location === 'inside' && (
               <>
-                <ThemedText type="smallBold" style={styles.label}>
-                  Floor
-                </ThemedText>
-                <Dropdown value={floor} onChange={(v) => setFloor(v)} options={CDS_FLOORS} />
-
-                <View style={styles.positionHeader}>
+                <View style={styles.labelRow}>
                   <ThemedText type="smallBold" style={styles.label}>
-                    Pinpoint the hazard
+                    Floor{!isPhoto ? ' *' : ''}
                   </ThemedText>
-                  <ThemedText
-                    type="small"
-                    themeColor={position ? 'textSecondary' : undefined}
-                    style={!position && styles.required}>
-                    {position ? '✓ placed' : 'tap the plan'}
+                </View>
+                <Dropdown value={floor} onChange={setFloor} options={CDS_FLOORS} />
+
+                <View style={styles.labelRow}>
+                  <ThemedText type="smallBold" style={styles.label}>
+                    Drag the pin to the exact spot{!isPhoto ? ' *' : ''}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    🛗 🪜 shown for context
                   </ThemedText>
                 </View>
                 <FloorPlan
                   planImage={floorPlanImage(floor)}
+                  floor={floor}
                   draftPin={position}
-                  onPlace={setPosition}
+                  onPlace={(p) => {
+                    setPosition(p);
+                    // Re-score with the new spatial context if we have a photo.
+                    if (isPhoto && photoUri) {
+                      const ctx = buildSpatialContext(floor, p, coords);
+                      classifyHazard(photoUri, ctx).then(setResult);
+                    }
+                  }}
+                  showFeatures
                   caption={floorLabel(floor)}
                 />
               </>
@@ -301,7 +348,11 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
             <ThemedText
               type="smallBold"
               style={{ color: canSubmit ? '#fff' : theme.textSecondary }}>
-              {analyzing ? 'Analyzing…' : 'Submit report'}
+              {analyzing
+                ? 'Analyzing…'
+                : !isPhoto && missingManual.length
+                  ? `Add ${missingManual.join(' & ')} to submit`
+                  : 'Submit report'}
             </ThemedText>
           </Pressable>
         </View>
@@ -313,6 +364,72 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
         onCapture={handleCapture}
       />
     </Modal>
+  );
+}
+
+function SeverityResult({
+  result,
+}: {
+  result: { severity: number; baseSeverity: number; locationBonus: number; reason: string } | null;
+}) {
+  const theme = useTheme();
+  return (
+    <>
+      <ThemedText type="smallBold" style={styles.label}>
+        Severity (assigned by AI)
+      </ThemedText>
+      <View style={[styles.severityCard, { borderColor: theme.border }]}>
+        {result ? (
+          <>
+            <View style={styles.severityTop}>
+              <View style={[styles.severityBadge, { backgroundColor: severityColor(result.severity) }]}>
+                <ThemedText type="smallBold" style={styles.severityBadgeText}>
+                  {result.severity}
+                </ThemedText>
+              </View>
+              <View style={styles.severityMath}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  base {result.baseSeverity}
+                  {result.locationBonus > 0 ? `  +${result.locationBonus} location` : ''}
+                  {`  =  ${result.severity}/10`}
+                </ThemedText>
+              </View>
+            </View>
+            {!!result.reason && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {result.reason}
+              </ThemedText>
+            )}
+          </>
+        ) : (
+          <ThemedText type="small" themeColor="textSecondary">
+            Severity is scored from the photo and where you pin it.
+          </ThemedText>
+        )}
+      </View>
+    </>
+  );
+}
+
+function HazardTypeDropdown({
+  value,
+  onChange,
+}: {
+  value: HazardType;
+  onChange: (v: HazardType) => void;
+}) {
+  const options: HazardType[] = [
+    'Spill',
+    'Broken elevator',
+    'Blocked path',
+    'Broken door',
+    'Wet floor',
+    'Debris',
+    'Lighting out',
+    'Other',
+  ];
+  return (
+    <Dropdown value={value} onChange={onChange} options={options.map((t) => ({ value: t, label: t }))} />
   );
 }
 
@@ -390,34 +507,6 @@ function RadioButton({
   );
 }
 
-function SeverityStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.stepper, { borderColor: theme.border }]}>
-      <Pressable
-        accessibilityLabel="Decrease severity"
-        onPress={() => onChange(Math.max(1, value - 1))}
-        style={styles.stepperBtn}>
-        <ThemedText type="subtitle" themeColor="textSecondary">
-          −
-        </ThemedText>
-      </Pressable>
-      <View style={styles.stepperValue}>
-        <View style={[styles.severityDot, { backgroundColor: severityColor(value) }]} />
-        <ThemedText type="default">{value}</ThemedText>
-      </View>
-      <Pressable
-        accessibilityLabel="Increase severity"
-        onPress={() => onChange(Math.min(10, value + 1))}
-        style={styles.stepperBtn}>
-        <ThemedText type="subtitle" themeColor="textSecondary">
-          +
-        </ThemedText>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
@@ -446,7 +535,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   preview: { width: '100%', aspectRatio: 16 / 9, borderRadius: Spacing.three },
-  analyzeBanner: {
+  banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
@@ -459,10 +548,30 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     borderRadius: Spacing.three,
   },
-  twoCol: { flexDirection: 'row', gap: Spacing.three },
-  col: { flex: 1, gap: Spacing.two },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   label: { marginBottom: Spacing.one },
-  severityHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  readonlyField: {
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+  },
+  severityCard: {
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  severityTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  severityBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  severityBadgeText: { color: '#fff', fontSize: 16 },
+  severityMath: { flex: 1 },
   textArea: {
     borderWidth: 1,
     borderRadius: Spacing.three,
@@ -471,11 +580,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     fontSize: 16,
   },
-  buildingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  buildingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   radioRow: { flexDirection: 'row', gap: Spacing.five, marginTop: Spacing.one },
   radio: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   radioOuter: {
@@ -487,19 +592,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioInner: { width: 11, height: 11, borderRadius: 6, backgroundColor: '#2F7CF6' },
-  positionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   required: { color: BU.red },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: Spacing.three,
-    paddingHorizontal: Spacing.two,
-  },
-  stepperBtn: { width: 40, height: 48, alignItems: 'center', justifyContent: 'center' },
-  stepperValue: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  severityDot: { width: 12, height: 12, borderRadius: 6 },
   submit: {
     marginTop: Spacing.three,
     borderRadius: Spacing.five,

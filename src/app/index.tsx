@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,6 +41,14 @@ export default function HomeScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             {hazards.length} active
           </ThemedText>
+          <Link href="/dev/features" asChild>
+            <Pressable
+              style={StyleSheet.flatten([styles.alertsBtn, { borderColor: theme.border }])}
+              accessibilityRole="button"
+              accessibilityLabel="Feature capture dev tool">
+              <ThemedText type="small">🛠️</ThemedText>
+            </Pressable>
+          </Link>
           <Pressable
             style={[styles.alertsBtn, { borderColor: theme.border }]}
             accessibilityRole="button"

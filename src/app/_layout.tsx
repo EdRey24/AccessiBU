@@ -15,6 +15,7 @@ export default function RootLayout() {
           <HazardProvider>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
+              <Stack.Screen name="dev/features" />
             </Stack>
             <StatusBar style="auto" />
           </HazardProvider>
