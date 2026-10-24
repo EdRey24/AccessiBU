@@ -1,0 +1,2077 @@
+{
+ "type": "FeatureCollection",
+ "crs_note": "Local coordinates in meters; origin = building SW corner, +x east, +y north. Georeference later with a 4-parameter transform.",
+ "building_outline": {
+  "type": "Polygon",
+  "coordinates": [
+   [
+    [
+     0.0,
+     37.1
+    ],
+    [
+     41.094,
+     37.1
+    ],
+    [
+     41.094,
+     22.491
+    ],
+    [
+     89.44,
+     22.491
+    ],
+    [
+     89.44,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     37.1
+    ]
+   ]
+  ]
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "id": "unit-00",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       0.263,
+       36.785
+      ],
+      [
+       4.151,
+       36.785
+      ],
+      [
+       4.151,
+       32.108
+      ],
+      [
+       0.263,
+       32.108
+      ],
+      [
+       0.263,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Director",
+    "category": "office",
+    "level": 2,
+    "area_m2": 18.2,
+    "area_ft2": 196,
+    "label_point": [
+     2.21,
+     34.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-01",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       4.257,
+       36.785
+      ],
+      [
+       7.725,
+       36.785
+      ],
+      [
+       7.725,
+       32.108
+      ],
+      [
+       4.257,
+       32.108
+      ],
+      [
+       4.257,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Faculty",
+    "category": "office",
+    "level": 2,
+    "area_m2": 16.2,
+    "area_ft2": 175,
+    "label_point": [
+     5.99,
+     34.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-02",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       7.83,
+       36.785
+      ],
+      [
+       11.298,
+       36.785
+      ],
+      [
+       11.298,
+       32.108
+      ],
+      [
+       7.83,
+       32.108
+      ],
+      [
+       7.83,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Technical Staff",
+    "category": "office",
+    "level": 2,
+    "area_m2": 16.2,
+    "area_ft2": 175,
+    "label_point": [
+     9.56,
+     34.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-03",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       11.403,
+       36.785
+      ],
+      [
+       14.872,
+       36.785
+      ],
+      [
+       14.872,
+       32.108
+      ],
+      [
+       11.403,
+       32.108
+      ],
+      [
+       11.403,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Full-Time Lecturer",
+    "category": "office",
+    "level": 2,
+    "area_m2": 16.2,
+    "area_ft2": 175,
+    "label_point": [
+     13.14,
+     34.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-04",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       14.977,
+       36.785
+      ],
+      [
+       18.445,
+       36.785
+      ],
+      [
+       18.445,
+       32.108
+      ],
+      [
+       14.977,
+       32.108
+      ],
+      [
+       14.977,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Part-Time Lecturer",
+    "category": "office",
+    "level": 2,
+    "area_m2": 16.2,
+    "area_ft2": 175,
+    "label_point": [
+     16.71,
+     34.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-05",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       18.55,
+       36.785
+      ],
+      [
+       22.018,
+       36.785
+      ],
+      [
+       22.018,
+       32.108
+      ],
+      [
+       18.55,
+       32.108
+      ],
+      [
+       18.55,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Post-Doc",
+    "category": "office",
+    "level": 2,
+    "area_m2": 16.2,
+    "area_ft2": 175,
+    "label_point": [
+     20.28,
+     34.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-06",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       22.124,
+       36.785
+      ],
+      [
+       25.592,
+       36.785
+      ],
+      [
+       25.592,
+       32.108
+      ],
+      [
+       22.124,
+       32.108
+      ],
+      [
+       22.124,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Grad (3)",
+    "category": "office",
+    "level": 2,
+    "area_m2": 16.2,
+    "area_ft2": 175,
+    "label_point": [
+     23.86,
+     34.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-07",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       25.697,
+       36.785
+      ],
+      [
+       29.27,
+       36.785
+      ],
+      [
+       29.27,
+       32.108
+      ],
+      [
+       25.697,
+       32.108
+      ],
+      [
+       25.697,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Clinical Professor",
+    "category": "office",
+    "level": 2,
+    "area_m2": 16.7,
+    "area_ft2": 180,
+    "label_point": [
+     27.48,
+     34.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-08",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       29.375,
+       36.785
+      ],
+      [
+       31.74,
+       36.785
+      ],
+      [
+       31.74,
+       31.95
+      ],
+      [
+       29.375,
+       31.95
+      ],
+      [
+       29.375,
+       36.785
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Study Space (north)",
+    "category": "study",
+    "level": 2,
+    "area_m2": 11.4,
+    "area_ft2": 123,
+    "label_point": [
+     30.56,
+     34.37
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-09",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       0.263,
+       29.428
+      ],
+      [
+       5.78,
+       29.428
+      ],
+      [
+       5.78,
+       14.977
+      ],
+      [
+       0.263,
+       14.977
+      ],
+      [
+       0.263,
+       29.428
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "BU Spark! Workspace & Lounge",
+    "category": "workspace",
+    "level": 2,
+    "area_m2": 79.7,
+    "area_ft2": 858,
+    "label_point": [
+     3.02,
+     22.2
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-10",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       7.094,
+       29.323
+      ],
+      [
+       11.981,
+       29.323
+      ],
+      [
+       11.981,
+       25.75
+      ],
+      [
+       7.094,
+       25.75
+      ],
+      [
+       7.094,
+       29.323
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "BU Spark! Meeting Room (6 workstations)",
+    "category": "workspace",
+    "level": 2,
+    "area_m2": 17.5,
+    "area_ft2": 188,
+    "label_point": [
+     9.54,
+     27.54
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-11",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       7.094,
+       25.592
+      ],
+      [
+       11.981,
+       25.592
+      ],
+      [
+       11.981,
+       22.229
+      ],
+      [
+       7.094,
+       22.229
+      ],
+      [
+       7.094,
+       25.592
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "6-Seat Meeting Room (Technical Staff)",
+    "category": "office",
+    "level": 2,
+    "area_m2": 16.4,
+    "area_ft2": 177,
+    "label_point": [
+     9.54,
+     23.91
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-12",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       7.094,
+       22.071
+      ],
+      [
+       11.981,
+       22.071
+      ],
+      [
+       11.981,
+       14.977
+      ],
+      [
+       7.094,
+       14.977
+      ],
+      [
+       7.094,
+       22.071
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "BU Spark! Meeting Room",
+    "category": "workspace",
+    "level": 2,
+    "area_m2": 34.7,
+    "area_ft2": 373,
+    "label_point": [
+     9.54,
+     18.52
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-13",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       0.263,
+       14.872
+      ],
+      [
+       11.981,
+       14.872
+      ],
+      [
+       11.981,
+       13.978
+      ],
+      [
+       0.263,
+       10.3
+      ],
+      [
+       0.263,
+       14.872
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Informal Collaboration",
+    "category": "study",
+    "level": 2,
+    "area_m2": 32.0,
+    "area_ft2": 345,
+    "label_point": [
+     3.19,
+     12.14
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-14",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       0.263,
+       10.3
+      ],
+      [
+       11.981,
+       13.978
+      ],
+      [
+       11.981,
+       0.315
+      ],
+      [
+       0.263,
+       0.315
+      ],
+      [
+       0.263,
+       10.3
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Study Space (west)",
+    "category": "study",
+    "level": 2,
+    "area_m2": 138.6,
+    "area_ft2": 1491,
+    "label_point": [
+     6.12,
+     5.31
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-15",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       14.031,
+       30.111
+      ],
+      [
+       16.396,
+       30.111
+      ],
+      [
+       16.396,
+       25.119
+      ],
+      [
+       14.031,
+       25.119
+      ],
+      [
+       14.031,
+       30.111
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Pantry",
+    "category": "service",
+    "level": 2,
+    "area_m2": 11.8,
+    "area_ft2": 127,
+    "label_point": [
+     15.21,
+     27.62
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-16",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       14.031,
+       25.119
+      ],
+      [
+       17.026,
+       25.119
+      ],
+      [
+       17.026,
+       23.227
+      ],
+      [
+       14.031,
+       23.227
+      ],
+      [
+       14.031,
+       25.119
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Janitor",
+    "category": "service",
+    "level": 2,
+    "area_m2": 5.7,
+    "area_ft2": 61,
+    "label_point": [
+     15.53,
+     24.17
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-17",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       16.501,
+       30.111
+      ],
+      [
+       20.705,
+       30.111
+      ],
+      [
+       20.705,
+       25.119
+      ],
+      [
+       16.501,
+       25.119
+      ],
+      [
+       16.501,
+       30.111
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "All-Gender WC",
+    "category": "restroom",
+    "level": 2,
+    "area_m2": 21.0,
+    "area_ft2": 226,
+    "label_point": [
+     18.6,
+     27.62
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-18",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       20.862,
+       30.006
+      ],
+      [
+       23.858,
+       30.006
+      ],
+      [
+       23.858,
+       26.958
+      ],
+      [
+       20.862,
+       26.958
+      ],
+      [
+       20.862,
+       30.006
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "All-Gender WC 2",
+    "category": "restroom",
+    "level": 2,
+    "area_m2": 9.1,
+    "area_ft2": 98,
+    "label_point": [
+     22.36,
+     28.48
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-19",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       24.015,
+       30.111
+      ],
+      [
+       30.689,
+       30.111
+      ],
+      [
+       30.689,
+       26.958
+      ],
+      [
+       24.015,
+       26.958
+      ],
+      [
+       24.015,
+       30.111
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Stair B",
+    "category": "stair",
+    "level": 2,
+    "area_m2": 21.0,
+    "area_ft2": 227,
+    "label_point": [
+     27.35,
+     28.53
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-20",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       23.858,
+       26.853
+      ],
+      [
+       27.431,
+       26.853
+      ],
+      [
+       27.431,
+       23.227
+      ],
+      [
+       23.858,
+       23.227
+      ],
+      [
+       23.858,
+       26.853
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Electrical Room",
+    "category": "service",
+    "level": 2,
+    "area_m2": 13.0,
+    "area_ft2": 139,
+    "label_point": [
+     25.64,
+     25.04
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-21",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       27.536,
+       25.644
+      ],
+      [
+       30.689,
+       25.644
+      ],
+      [
+       30.689,
+       23.227
+      ],
+      [
+       27.536,
+       23.227
+      ],
+      [
+       27.536,
+       25.644
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Shaft",
+    "category": "service",
+    "level": 2,
+    "area_m2": 7.6,
+    "area_ft2": 82,
+    "label_point": [
+     29.11,
+     24.44
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-22",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       16.816,
+       23.122
+      ],
+      [
+       20.705,
+       23.122
+      ],
+      [
+       20.705,
+       20.389
+      ],
+      [
+       16.816,
+       20.389
+      ],
+      [
+       16.816,
+       23.122
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Fire Alarm / IDF Room",
+    "category": "service",
+    "level": 2,
+    "area_m2": 10.6,
+    "area_ft2": 114,
+    "label_point": [
+     18.76,
+     21.76
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-23",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       14.188,
+       20.389
+      ],
+      [
+       20.705,
+       20.389
+      ],
+      [
+       20.705,
+       17.236
+      ],
+      [
+       14.188,
+       17.236
+      ],
+      [
+       14.188,
+       20.389
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Vestibule",
+    "category": "corridor",
+    "level": 2,
+    "area_m2": 20.5,
+    "area_ft2": 221,
+    "label_point": [
+     17.45,
+     18.81
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-24",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       14.188,
+       17.236
+      ],
+      [
+       20.705,
+       17.236
+      ],
+      [
+       20.705,
+       14.241
+      ],
+      [
+       14.188,
+       14.241
+      ],
+      [
+       14.188,
+       17.236
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Stair A",
+    "category": "stair",
+    "level": 2,
+    "area_m2": 19.5,
+    "area_ft2": 210,
+    "label_point": [
+     17.45,
+     15.74
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-25",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       20.862,
+       23.122
+      ],
+      [
+       30.689,
+       23.122
+      ],
+      [
+       30.689,
+       14.241
+      ],
+      [
+       20.862,
+       14.241
+      ],
+      [
+       20.862,
+       23.122
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Elevator Vestibule",
+    "category": "elevator",
+    "level": 2,
+    "area_m2": 87.3,
+    "area_ft2": 939,
+    "label_point": [
+     25.78,
+     18.68
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-26",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       33.369,
+       36.68
+      ],
+      [
+       40.674,
+       36.68
+      ],
+      [
+       40.674,
+       24.331
+      ],
+      [
+       33.369,
+       24.331
+      ],
+      [
+       33.369,
+       36.68
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "C.S. BUILDS Lab",
+    "category": "lab",
+    "level": 2,
+    "area_m2": 90.2,
+    "area_ft2": 971,
+    "label_point": [
+     37.02,
+     30.51
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-27",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       33.369,
+       24.226
+      ],
+      [
+       40.674,
+       24.226
+      ],
+      [
+       40.674,
+       21.966
+      ],
+      [
+       33.369,
+       21.966
+      ],
+      [
+       33.369,
+       24.226
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Shafts",
+    "category": "service",
+    "level": 2,
+    "area_m2": 16.5,
+    "area_ft2": 178,
+    "label_point": [
+     37.02,
+     23.1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-28",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       33.212,
+       21.703
+      ],
+      [
+       36.995,
+       21.703
+      ],
+      [
+       36.995,
+       14.083
+      ],
+      [
+       33.212,
+       14.083
+      ],
+      [
+       33.212,
+       21.703
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Study Space (308 ft\u00b2)",
+    "category": "study",
+    "level": 2,
+    "area_m2": 28.8,
+    "area_ft2": 310,
+    "label_point": [
+     35.1,
+     17.89
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-29",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       36.995,
+       22.229
+      ],
+      [
+       50.816,
+       22.229
+      ],
+      [
+       50.816,
+       14.083
+      ],
+      [
+       36.995,
+       14.083
+      ],
+      [
+       36.995,
+       22.229
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Communication Stair",
+    "category": "stair",
+    "level": 2,
+    "area_m2": 112.6,
+    "area_ft2": 1212,
+    "label_point": [
+     43.91,
+     18.16
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-30",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       14.819,
+       10.563
+      ],
+      [
+       32.423,
+       10.563
+      ],
+      [
+       14.819,
+       7.147
+      ],
+      [
+       14.819,
+       10.563
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Study Space (388 ft\u00b2)",
+    "category": "study",
+    "level": 2,
+    "area_m2": 30.1,
+    "area_ft2": 324,
+    "label_point": [
+     19.22,
+     8.86
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-31",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       14.819,
+       3.311
+      ],
+      [
+       34.525,
+       3.311
+      ],
+      [
+       34.525,
+       0.315
+      ],
+      [
+       14.819,
+       0.315
+      ],
+      [
+       14.819,
+       3.311
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Sit-Step",
+    "category": "study",
+    "level": 2,
+    "area_m2": 59.0,
+    "area_ft2": 635,
+    "label_point": [
+     24.67,
+     1.81
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-32",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       32.266,
+       5.045
+      ],
+      [
+       50.816,
+       5.045
+      ],
+      [
+       50.816,
+       3.311
+      ],
+      [
+       32.266,
+       3.311
+      ],
+      [
+       32.266,
+       5.045
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Stair",
+    "category": "stair",
+    "level": 2,
+    "area_m2": 32.2,
+    "area_ft2": 346,
+    "label_point": [
+     41.54,
+     4.18
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-33",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       50.974,
+       22.229
+      ],
+      [
+       62.745,
+       22.229
+      ],
+      [
+       62.745,
+       14.714
+      ],
+      [
+       50.974,
+       14.714
+      ],
+      [
+       50.974,
+       22.229
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Math Student Lounge",
+    "category": "lab",
+    "level": 2,
+    "area_m2": 88.5,
+    "area_ft2": 952,
+    "label_point": [
+     56.86,
+     18.47
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-34",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       63.06,
+       22.071
+      ],
+      [
+       68.0,
+       22.071
+      ],
+      [
+       68.0,
+       15.397
+      ],
+      [
+       63.06,
+       15.397
+      ],
+      [
+       63.06,
+       22.071
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Women's WC",
+    "category": "restroom",
+    "level": 2,
+    "area_m2": 33.0,
+    "area_ft2": 355,
+    "label_point": [
+     65.53,
+     18.73
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-35",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       68.21,
+       22.071
+      ],
+      [
+       73.044,
+       22.071
+      ],
+      [
+       73.044,
+       17.236
+      ],
+      [
+       68.21,
+       17.236
+      ],
+      [
+       68.21,
+       22.071
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Men's WC",
+    "category": "restroom",
+    "level": 2,
+    "area_m2": 23.4,
+    "area_ft2": 252,
+    "label_point": [
+     70.63,
+     19.65
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-36",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       70.942,
+       17.131
+      ],
+      [
+       73.307,
+       17.131
+      ],
+      [
+       73.307,
+       14.609
+      ],
+      [
+       70.942,
+       14.609
+      ],
+      [
+       70.942,
+       17.131
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "IDF Room",
+    "category": "service",
+    "level": 2,
+    "area_m2": 6.0,
+    "area_ft2": 64,
+    "label_point": [
+     72.12,
+     15.87
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-37",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       74.463,
+       22.071
+      ],
+      [
+       81.032,
+       22.071
+      ],
+      [
+       81.032,
+       18.025
+      ],
+      [
+       74.463,
+       18.025
+      ],
+      [
+       74.463,
+       22.071
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Stair C",
+    "category": "stair",
+    "level": 2,
+    "area_m2": 26.6,
+    "area_ft2": 286,
+    "label_point": [
+     77.75,
+     20.05
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-38",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       73.412,
+       17.92
+      ],
+      [
+       78.93,
+       17.92
+      ],
+      [
+       78.93,
+       14.609
+      ],
+      [
+       73.412,
+       14.609
+      ],
+      [
+       73.412,
+       17.92
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Elevators 7\u20138",
+    "category": "elevator",
+    "level": 2,
+    "area_m2": 18.3,
+    "area_ft2": 197,
+    "label_point": [
+     76.17,
+     16.26
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-39",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       81.978,
+       22.229
+      ],
+      [
+       89.177,
+       22.229
+      ],
+      [
+       89.177,
+       13.978
+      ],
+      [
+       81.978,
+       13.978
+      ],
+      [
+       81.978,
+       22.229
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "20-Person Classroom",
+    "category": "classroom",
+    "level": 2,
+    "area_m2": 59.4,
+    "area_ft2": 639,
+    "label_point": [
+     85.58,
+     18.1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-40",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       51.079,
+       10.405
+      ],
+      [
+       63.796,
+       10.405
+      ],
+      [
+       63.796,
+       0.315
+      ],
+      [
+       51.079,
+       0.315
+      ],
+      [
+       51.079,
+       10.405
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "48-Person Classroom A",
+    "category": "classroom",
+    "level": 2,
+    "area_m2": 128.3,
+    "area_ft2": 1381,
+    "label_point": [
+     57.44,
+     5.36
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-41",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       64.006,
+       10.405
+      ],
+      [
+       76.46,
+       10.405
+      ],
+      [
+       76.46,
+       0.315
+      ],
+      [
+       64.006,
+       0.315
+      ],
+      [
+       64.006,
+       10.405
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "48-Person Classroom B",
+    "category": "classroom",
+    "level": 2,
+    "area_m2": 125.7,
+    "area_ft2": 1353,
+    "label_point": [
+     70.23,
+     5.36
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-42",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       76.67,
+       10.405
+      ],
+      [
+       89.177,
+       10.405
+      ],
+      [
+       89.177,
+       0.315
+      ],
+      [
+       76.67,
+       0.315
+      ],
+      [
+       76.67,
+       10.405
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "48-Person Classroom C",
+    "category": "classroom",
+    "level": 2,
+    "area_m2": 126.2,
+    "area_ft2": 1358,
+    "label_point": [
+     82.92,
+     5.36
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-43",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       0.263,
+       32.003
+      ],
+      [
+       33.212,
+       32.003
+      ],
+      [
+       33.212,
+       14.083
+      ],
+      [
+       30.689,
+       14.083
+      ],
+      [
+       30.689,
+       30.216
+      ],
+      [
+       14.031,
+       30.216
+      ],
+      [
+       14.031,
+       14.083
+      ],
+      [
+       11.981,
+       14.083
+      ],
+      [
+       11.981,
+       29.586
+      ],
+      [
+       0.263,
+       29.586
+      ],
+      [
+       0.263,
+       32.003
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Corridor (north)",
+    "category": "corridor",
+    "level": 2,
+    "area_m2": 140.0,
+    "area_ft2": 1507,
+    "label_point": [
+     31.95,
+     21.83
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-44",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       5.78,
+       29.428
+      ],
+      [
+       7.094,
+       29.428
+      ],
+      [
+       7.094,
+       14.977
+      ],
+      [
+       5.78,
+       14.977
+      ],
+      [
+       5.78,
+       29.428
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Corridor (west link)",
+    "category": "corridor",
+    "level": 2,
+    "area_m2": 19.0,
+    "area_ft2": 204,
+    "label_point": [
+     6.44,
+     22.2
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-45",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       11.981,
+       14.083
+      ],
+      [
+       50.816,
+       14.083
+      ],
+      [
+       50.816,
+       10.563
+      ],
+      [
+       11.981,
+       10.563
+      ],
+      [
+       11.981,
+       14.083
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Main Corridor",
+    "category": "corridor",
+    "level": 2,
+    "area_m2": 136.7,
+    "area_ft2": 1471,
+    "label_point": [
+     31.4,
+     12.32
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-46",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       11.981,
+       10.563
+      ],
+      [
+       14.819,
+       10.563
+      ],
+      [
+       14.819,
+       0.315
+      ],
+      [
+       11.981,
+       0.315
+      ],
+      [
+       11.981,
+       10.563
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "Corridor (south-west)",
+    "category": "corridor",
+    "level": 2,
+    "area_m2": 29.1,
+    "area_ft2": 313,
+    "label_point": [
+     13.4,
+     5.44
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "unit-47",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       50.974,
+       14.609
+      ],
+      [
+       89.335,
+       14.609
+      ],
+      [
+       89.335,
+       10.563
+      ],
+      [
+       50.974,
+       10.563
+      ],
+      [
+       50.974,
+       14.609
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "name": "East Corridor",
+    "category": "corridor",
+    "level": 2,
+    "area_m2": 155.2,
+    "area_ft2": 1671,
+    "label_point": [
+     70.15,
+     12.59
+    ]
+   }
+  }
+ ]
+}

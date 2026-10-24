@@ -27,6 +27,7 @@ import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
 import { classifyHazard } from '@/services/classifier';
+import { resolveFloor2Location } from '@/services/floor-geo';
 
 import { CameraCapture } from './camera-capture';
 import { Dropdown } from './dropdown';
@@ -158,6 +159,13 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     if (!canSubmit) return;
     const spatialContext =
       location === 'inside' && position ? buildSpatialContext(floor, position, coords) : null;
+
+    // Resolve the pin to its room + real coordinate (Floor 2 is digitized).
+    const resolved =
+      location === 'inside' && position && floor === 2
+        ? resolveFloor2Location(position)
+        : null;
+
     addHazard({
       type: effectiveType,
       severity: result ? result.severity : 5,
@@ -169,6 +177,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
       photoUri,
       spatialContext,
       severityReason: result?.reason,
+      room: resolved?.room ?? null,
+      coordinate: resolved?.coordinate ?? null,
     });
     close();
   };

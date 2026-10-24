@@ -50,6 +50,13 @@ export type Hazard = {
   spatialContext?: SpatialContext | null;
   /** How severity was derived, for display + debugging. */
   severityReason?: string;
+  /**
+   * Resolved room the pin fell in (from the floor-plan room polygons), and the
+   * real-world coordinate derived from the pin. Populated on report when inside
+   * a digitized floor (currently Floor 2). Null/undefined otherwise.
+   */
+  room?: { name: string; category: string; areaFt2: number } | null;
+  coordinate?: { longitude: number; latitude: number } | null;
 };
 
 /**

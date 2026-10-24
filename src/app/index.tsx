@@ -195,6 +195,16 @@ function HazardDetailSheet({
             <ThemedText type="small" themeColor="textSecondary">
               {floorLabel(hazard.floor)} · severity {hazard.severity}/10
             </ThemedText>
+            {hazard.room && (
+              <ThemedText type="small" themeColor="textSecondary">
+                📍 {hazard.room.name} ({hazard.room.category})
+              </ThemedText>
+            )}
+            {hazard.coordinate && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {hazard.coordinate.latitude.toFixed(6)}, {hazard.coordinate.longitude.toFixed(6)}
+              </ThemedText>
+            )}
             {hazard.description ? (
               <ThemedText type="default">{hazard.description}</ThemedText>
             ) : (

@@ -6,6 +6,9 @@ import type { Hazard } from '@/constants/hazards';
 import { floorFeatures, floorPlanSize } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { FLOOR2_ASPECT } from '@/services/floor-geo';
+
+import { Floor2RoomsSvg } from './floor2-rooms-svg.web';
 
 type Pos = { x: number; y: number };
 
@@ -97,7 +100,16 @@ export function FloorPlan({
   const px = (pos: Pos) => ({ left: pos.x * size.w - PIN / 2, top: pos.y * size.h - PIN / 2 });
 
   return (
-    <View style={[styles.plan, { aspectRatio: floorPlanSize(floor).width / floorPlanSize(floor).height, borderColor: theme.border }]}>
+    <View
+      style={[
+        styles.plan,
+        {
+          aspectRatio:
+            floor === 2 ? FLOOR2_ASPECT : floorPlanSize(floor).width / floorPlanSize(floor).height,
+          borderColor: theme.border,
+        },
+      ]}>
+
       <div
         ref={wrapRef}
         onPointerDown={placeable ? handlePointerDown : undefined}
@@ -110,7 +122,11 @@ export function FloorPlan({
           cursor: placeable ? 'crosshair' : 'default',
           touchAction: 'none',
         }}>
-        {planImage ? (
+        {floor === 2 ? (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Floor2RoomsSvg />
+          </View>
+        ) : planImage ? (
           <Image source={planImage} style={StyleSheet.absoluteFill} contentFit="fill" />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.backgroundElement }]} />
