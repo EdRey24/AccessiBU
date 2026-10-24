@@ -48,3 +48,6 @@ example
 # platform and need not live here in production.
 supabase/functions/.env
 supabase/.temp/
+
+# Kiro spec execution bookkeeping (session ids, timestamps) — local only.
+.kiro/specs/*/tasks.meta.json
