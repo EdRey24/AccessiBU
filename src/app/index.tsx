@@ -1,98 +1,287 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
+import { CampusMap } from '@/components/campus-map';
+import { FloorPlanView } from '@/components/floor-plan-view';
+import { ReportHazardModal } from '@/components/report-hazard-modal';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { CDS_FLOORS, floorLabel, type Hazard } from '@/constants/hazards';
+import { BU, severityColor, Spacing } from '@/constants/theme';
+import { useHazards } from '@/hooks/use-hazards';
+import { useTheme } from '@/hooks/use-theme';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+/** Either the 3D campus map, or a specific floor's 2D plan. */
+type Screen = { kind: 'map' } | { kind: 'floor'; floor: number };
+
+export default function HomeScreen() {
+  const theme = useTheme();
+  const { hazards } = useHazards();
+  const [screen, setScreen] = useState<Screen>({ kind: 'map' });
+  const [reportOpen, setReportOpen] = useState(false);
+  const [floorPickerOpen, setFloorPickerOpen] = useState(false);
+  const [detail, setDetail] = useState<Hazard | null>(null);
+
+  const insideCount = hazards.filter((h) => h.location === 'inside').length;
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <ThemedText type="subtitle" style={styles.brand}>
+            AccessiBU
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Boston University
+          </ThemedText>
+        </View>
+        <View style={styles.headerRight}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {hazards.length} active
+          </ThemedText>
+          <Pressable
+            style={[styles.alertsBtn, { borderColor: theme.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Nearby alerts">
+            <ThemedText type="small">🔔</ThemedText>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Main view: 3D map or 2D floor plan */}
+      <View style={styles.main}>
+        {screen.kind === 'map' ? (
+          <CampusMap
+            hazards={hazards}
+            onSelectBuilding={() => setFloorPickerOpen(true)}
+            onSelectHazard={(h) => {
+              if (h.floor !== null) setScreen({ kind: 'floor', floor: h.floor });
+              setDetail(h);
+            }}
+          />
+        ) : (
+          <FloorPlanView
+            floor={screen.floor}
+            hazards={hazards}
+            onBack={() => setScreen({ kind: 'map' })}
+            onSelectHazard={(h) => setDetail(h)}
+          />
+        )}
+      </View>
+
+      {/* Bottom bar */}
+      <View style={[styles.bottomBar, { borderColor: theme.border }]}>
+        <View style={styles.reportsSummary}>
+          <ThemedText type="smallBold">Active reports</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {insideCount === 0
+              ? 'No active hazards reported.'
+              : `${insideCount} report${insideCount === 1 ? '' : 's'} on CDS.`}
+          </ThemedText>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Report hazard"
+          onPress={() => setReportOpen(true)}
+          style={styles.fab}>
+          <ThemedText type="smallBold" style={styles.fabText}>
+            +  Report Hazard
+          </ThemedText>
+        </Pressable>
+      </View>
+
+      {/* Report flow */}
+      <ReportHazardModal visible={reportOpen} onClose={() => setReportOpen(false)} />
+
+      {/* Floor picker (tap building -> choose a floor) */}
+      <FloorPickerSheet
+        visible={floorPickerOpen}
+        onClose={() => setFloorPickerOpen(false)}
+        onPick={(floor) => {
+          setFloorPickerOpen(false);
+          setScreen({ kind: 'floor', floor });
+        }}
+        hazards={hazards}
+      />
+
+      {/* Hazard detail */}
+      <HazardDetailSheet hazard={detail} onClose={() => setDetail(null)} />
+    </SafeAreaView>
   );
 }
 
-export default function HomeScreen() {
+function FloorPickerSheet({
+  visible,
+  onClose,
+  onPick,
+  hazards,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onPick: (floor: number) => void;
+  hazards: Hazard[];
+}) {
+  const theme = useTheme();
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <View style={[styles.sheet, { backgroundColor: theme.background }]}>
+          <View style={styles.sheetHeader}>
+            <ThemedText type="smallBold">Choose a floor</ThemedText>
+            <Pressable onPress={onClose} accessibilityLabel="Close">
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                ✕
+              </ThemedText>
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.floorList}>
+            {CDS_FLOORS.map((f) => {
+              const count = hazards.filter(
+                (h) => h.location === 'inside' && h.floor === f.value
+              ).length;
+              return (
+                <Pressable
+                  key={f.value}
+                  onPress={() => onPick(f.value)}
+                  style={[styles.floorRow, { borderColor: theme.border }]}>
+                  <ThemedText type="default">{floorLabel(f.value)}</ThemedText>
+                  <ThemedText
+                    type="small"
+                    themeColor={count === 0 ? 'textSecondary' : undefined}
+                    style={count > 0 && styles.floorCountActive}>
+                    {count === 0 ? 'clear' : `${count} hazard${count > 1 ? 's' : ''}`}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+function HazardDetailSheet({
+  hazard,
+  onClose,
+}: {
+  hazard: Hazard | null;
+  onClose: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Modal visible={!!hazard} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        {hazard && (
+          <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
+            <View style={styles.detailHeader}>
+              <View style={[styles.detailDot, { backgroundColor: severityColor(hazard.severity) }]} />
+              <ThemedText type="subtitle" style={styles.detailTitle}>
+                {hazard.type}
+              </ThemedText>
+            </View>
+            <ThemedText type="small" themeColor="textSecondary">
+              {floorLabel(hazard.floor)} · severity {hazard.severity}/10
+            </ThemedText>
+            {hazard.description ? (
+              <ThemedText type="default">{hazard.description}</ThemedText>
+            ) : (
+              <ThemedText type="default" themeColor="textSecondary">
+                No description provided.
+              </ThemedText>
+            )}
+            <Pressable onPress={onClose} style={[styles.detailClose, { backgroundColor: BU.red }]}>
+              <ThemedText type="smallBold" style={styles.fabText}>
+                Close
+              </ThemedText>
+            </Pressable>
+          </View>
+        )}
+      </Pressable>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
+  container: { flex: 1 },
+  header: {
     flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
+  brand: { color: BU.red, fontSize: 28, lineHeight: 32, fontWeight: '800' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  alertsBtn: {
+    borderWidth: 1,
+    borderRadius: Spacing.five,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
+    paddingVertical: Spacing.two,
+  },
+  main: { flex: 1 },
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    borderTopWidth: 1,
+  },
+  reportsSummary: { flex: 1, gap: 2 },
+  fab: {
+    backgroundColor: BU.red,
+    borderRadius: Spacing.five,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  fabText: { color: '#fff' },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: Spacing.four,
+    borderTopRightRadius: Spacing.four,
+    maxHeight: '70%',
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.four,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.three,
+  },
+  floorList: { gap: Spacing.two, paddingBottom: Spacing.three },
+  floorCountActive: { color: BU.red, fontWeight: '700' },
+  floorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+  },
+  detailCard: {
+    margin: Spacing.four,
     borderRadius: Spacing.four,
+    padding: Spacing.four,
+    gap: Spacing.two,
+    marginBottom: Spacing.six,
+  },
+  detailHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  detailDot: { width: 16, height: 16, borderRadius: 8 },
+  detailTitle: { fontSize: 24, lineHeight: 30 },
+  detailClose: {
+    marginTop: Spacing.three,
+    borderRadius: Spacing.five,
+    paddingVertical: Spacing.three,
+    alignItems: 'center',
   },
 });

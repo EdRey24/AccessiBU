@@ -8,7 +8,8 @@
     "scheme": "accessibu",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.anonymous.AccessiBU"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,10 +18,14 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
-      "output": "server",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -28,9 +33,27 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#CC0000",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "AccessiBU uses the camera so you can take a live photo of a hazard to report it."
+        }
+      ],
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsDownloadToken": "pk.eyJ1Ijoia2lkdXM3NyIsImEiOiJjbXZtajdnazQwN2twMnlvcmlxdXJtdGJlIn0._k6Juto5zLqM0GEXa4IeAw"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AccessiBU uses your location to auto-detect which building you're in when reporting a hazard."
         }
       ]
     ],
