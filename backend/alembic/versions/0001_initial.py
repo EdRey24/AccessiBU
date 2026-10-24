@@ -4,6 +4,10 @@ Revision ID: 0001_initial
 Revises:
 Create Date: 2026-10-24
 
+Members point at Supabase auth users. A trigger inserts the member and
+another rejects a later email change. Row-level security is on with no
+policies for the anon or authenticated roles. The hazard-images bucket
+is public.
 """
 
 import sqlalchemy as sa
@@ -15,19 +19,15 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
+_TABLES = ("members", "hazards", "reports", "alerts")
+
 
 def upgrade() -> None:
-    """Creates the initial AccessiBU tables."""
+    """Creates the initial AccessiBU tables and auth triggers."""
     op.create_table(
         "members",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            server_default=sa.text("gen_random_uuid()"),
-            nullable=False,
-        ),
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("email", sa.String(length=255), nullable=False),
-        sa.Column("password_hash", sa.String(length=255), nullable=False),
         sa.Column(
             "role",
             sa.String(length=32),
@@ -47,6 +47,12 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "role IN ('member', 'admin')",
             name="ck_members_role",
+        ),
+        sa.ForeignKeyConstraint(
+            ["id"],
+            ["auth.users.id"],
+            name="fk_members_auth_user",
+            ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("email"),
@@ -154,13 +160,78 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("hazard_id"),
     )
+    op.execute(_INSERT_MEMBER_FUNCTION)
+    op.execute(_INSERT_MEMBER_TRIGGER)
+    op.execute(_LOCK_EMAIL_FUNCTION)
+    op.execute(_LOCK_EMAIL_TRIGGER)
+    for table in _TABLES:
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        op.execute(f"REVOKE ALL ON TABLE {table} FROM anon, authenticated")
+    op.execute(_PUBLIC_BUCKET)
 
 
 def downgrade() -> None:
-    """Drops the initial AccessiBU tables."""
+    """Drops the auth triggers, bucket, and initial tables."""
+    op.execute("DROP TRIGGER IF EXISTS members_insert_from_auth ON auth.users")
+    op.execute("DROP TRIGGER IF EXISTS members_lock_auth_email ON auth.users")
+    op.execute("DROP FUNCTION IF EXISTS insert_member_from_auth()")
+    op.execute("DROP FUNCTION IF EXISTS reject_auth_email_change()")
+    op.execute("DELETE FROM storage.objects WHERE bucket_id = 'hazard-images'")
+    op.execute("DELETE FROM storage.buckets WHERE id = 'hazard-images'")
     op.drop_table("alerts")
     op.drop_index("ix_reports_member_id", table_name="reports")
     op.drop_index("ix_reports_hazard_id", table_name="reports")
     op.drop_table("reports")
     op.drop_table("hazards")
     op.drop_table("members")
+
+
+_INSERT_MEMBER_FUNCTION = """
+CREATE FUNCTION insert_member_from_auth()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    INSERT INTO public.members (
+        id, email, role, mobility_preference
+    )
+    VALUES (NEW.id, lower(NEW.email), 'member', false);
+    RETURN NEW;
+END;
+$$
+"""
+
+_INSERT_MEMBER_TRIGGER = """
+CREATE TRIGGER members_insert_from_auth
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION insert_member_from_auth()
+"""
+
+_LOCK_EMAIL_FUNCTION = """
+CREATE FUNCTION reject_auth_email_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.email IS DISTINCT FROM OLD.email THEN
+        RAISE EXCEPTION 'member address cannot change';
+    END IF;
+    RETURN NEW;
+END;
+$$
+"""
+
+_LOCK_EMAIL_TRIGGER = """
+CREATE TRIGGER members_lock_auth_email
+BEFORE UPDATE OF email ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION reject_auth_email_change()
+"""
+
+_PUBLIC_BUCKET = """
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('hazard-images', 'hazard-images', true)
+"""
