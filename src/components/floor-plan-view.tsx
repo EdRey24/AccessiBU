@@ -97,9 +97,10 @@ const styles = StyleSheet.create({
   },
   planWrap: {
     width: '100%',
-    // Cap the plan so it stays readable and never overflows the viewport on
-    // wide screens — centered with a sensible max width.
-    maxWidth: 560,
+    // Cap the plan so it stays readable and centered on very wide monitors,
+    // but allow it to grow large — the wide Floor 2 plan (≈2.4:1) looks cramped
+    // at a small cap, so give it generous room.
+    maxWidth: 1000,
     alignSelf: 'center',
   },
   empty: { textAlign: 'center', marginTop: Spacing.three },
