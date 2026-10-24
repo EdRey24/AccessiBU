@@ -6,7 +6,7 @@ import { CampusMap } from '@/components/campus-map';
 import { FloorPlanView } from '@/components/floor-plan-view';
 import { ReportHazardModal } from '@/components/report-hazard-modal';
 import { ThemedText } from '@/components/themed-text';
-import { CDS_FLOORS, floorLabel, type Hazard } from '@/constants/hazards';
+import { CDS_FLOORS, floorLabel, storedHazardLabel, type Hazard } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
 import { useSession } from '@/hooks/use-session';
@@ -173,6 +173,15 @@ function FloorPickerSheet({
   );
 }
 
+function severityLabel(hazard: Hazard): string {
+  if (hazard.hazardType) {
+    return hazard.severityScore != null
+      ? `severity ${hazard.severityScore}/100`
+      : 'severity stored on the hazard';
+  }
+  return `severity ${hazard.severity}/10`;
+}
+
 function HazardDetailSheet({
   hazard,
   onClose,
@@ -189,11 +198,11 @@ function HazardDetailSheet({
             <View style={styles.detailHeader}>
               <View style={[styles.detailDot, { backgroundColor: severityColor(hazard.severity) }]} />
               <ThemedText type="subtitle" style={styles.detailTitle}>
-                {hazard.type}
+                {hazard.hazardType ? storedHazardLabel(hazard.hazardType) : hazard.type}
               </ThemedText>
             </View>
             <ThemedText type="small" themeColor="textSecondary">
-              {floorLabel(hazard.floor)} · severity {hazard.severity}/10
+              {floorLabel(hazard.floor)} · {severityLabel(hazard)}
             </ThemedText>
             {hazard.room && (
               <ThemedText type="small" themeColor="textSecondary">

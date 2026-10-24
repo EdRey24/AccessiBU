@@ -1,15 +1,17 @@
 """HTTP entrypoint for the AccessiBU API.
 
 Creates the FastAPI application, exposes a health check, and mounts
-member authentication. Report submission and hazard alerts are not
-served here.
+member authentication, hazard reads, and report submission. Facilities
+email is not sent here.
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.hazards.router import router as hazards_router
 from app.members.router import router as members_router
+from app.reports.router import router as reports_router
 
 
 def _cors_origins() -> list[str]:
@@ -34,6 +36,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(members_router)
+app.include_router(hazards_router)
+app.include_router(reports_router)
 
 
 @app.get("/health")

@@ -21,13 +21,16 @@ import {
     isAtCDS,
     type Location as HazardLocation,
     type HazardType,
-    type ReportMethod
+    type ReportMethod,
+    type StoredHazardType,
 } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
+import { ApiError } from '@/services/api';
 import { classifyHazard } from '@/services/classifier';
 import { resolveFloor2Location } from '@/services/floor-geo';
+import { pinSeverity, submitPhotoReport } from '@/services/reports';
 
 import { CameraCapture } from './camera-capture';
 import { Dropdown } from './dropdown';
@@ -52,6 +55,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
   const [analyzing, setAnalyzing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   // The model result (type, severity, description) — null until classified.
   const [result, setResult] = useState<{
     type: HazardType;
@@ -84,6 +89,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     setMethod('photo');
     setPhotoUri(null);
     setAnalyzing(false);
+    setSubmitting(false);
+    setSubmitError(null);
     setResult(null);
     setManualType('Spill');
     setDescription('');
@@ -127,20 +134,28 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
 
   // Run the classifier whenever we have a photo + a pin (so spatial context is
   // available). Re-runs if the pin or floor changes materially.
-  const runClassifier = async (uri: string | null, gps: Coords | null) => {
-    if (!position) return;
+  const runClassifier = async (uri: string | null, gps: Coords | null, nextFloor = floor) => {
+    const inside = gps ? isAtCDS(gps) : location === 'inside';
+    if (!position || (nextFloor === 2 && inside)) return;
     setAnalyzing(true);
-    const ctx = buildSpatialContext(floor, position, gps);
-    const r = await classifyHazard(uri, ctx);
-    setResult(r);
-    setAnalyzing(false);
+    try {
+      const ctx = buildSpatialContext(nextFloor, position, gps);
+      setResult(await classifyHazard(uri, ctx));
+    } catch {
+      setResult(null);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
-  // Photo captured -> detect building -> classify with spatial context.
+  // Photo captured -> detect building. An inside Floor 2 photo is classified
+  // when the report is stored. Anywhere else still uses the preview classifier.
   const handleCapture = async (uri: string) => {
     setPhotoUri(uri);
     setCameraOpen(false);
     const gps = await detectBuilding();
+    const staysInside = gps ? isAtCDS(gps) : true;
+    if (floor === 2 && staysInside) return;
     await runClassifier(uri, gps);
   };
 
@@ -149,14 +164,17 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   const manualValid =
     description.trim().length > 0 &&
     (location === 'outside' || (floor !== null && position !== null));
+  const storesPhoto = isPhoto && location === 'inside' && floor === 2 && !!photoUri && !!position;
   const canSubmit =
     !analyzing &&
-    (isPhoto
-      ? !!result && (location === 'outside' || position !== null)
-      : manualValid);
+    !submitting &&
+    (storesPhoto ||
+      (isPhoto
+        ? !!result && (location === 'outside' || position !== null)
+        : manualValid));
 
-  const submit = () => {
-    if (!canSubmit) return;
+  const submit = async () => {
+    if (!canSubmit || submitting) return;
     const spatialContext =
       location === 'inside' && position ? buildSpatialContext(floor, position, coords) : null;
 
@@ -165,6 +183,43 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
       location === 'inside' && position && floor === 2
         ? resolveFloor2Location(position)
         : null;
+
+    if (isPhoto && photoUri && resolved) {
+      setSubmitting(true);
+      setSubmitError(null);
+      try {
+        const stored = await submitPhotoReport({
+          uri: photoUri,
+          latitude: resolved.coordinate.latitude,
+          longitude: resolved.coordinate.longitude,
+        });
+        addHazard({
+          id: stored.hazardId,
+          createdAt: stored.createdAt,
+          type: clientHazardType(stored.hazardType),
+          hazardType: stored.hazardType,
+          severity: stored.severityScore == null ? 5 : pinSeverity(stored.severityScore),
+          severityScore: stored.severityScore,
+          description: stored.summary,
+          location,
+          floor,
+          position,
+          method,
+          photoUri,
+          spatialContext,
+          room: resolved.room,
+          coordinate: resolved.coordinate,
+        });
+        close();
+      } catch (error) {
+        setSubmitError(
+          error instanceof ApiError ? error.message : 'The report could not be stored.',
+        );
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
 
     addHazard({
       type: effectiveType,
@@ -256,7 +311,11 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
             {isPhoto ? (
               <View style={[styles.readonlyField, { borderColor: theme.border }]}>
                 <ThemedText type="default" themeColor={result ? 'text' : 'textSecondary'}>
-                  {result ? result.type : 'Take a photo to classify…'}
+                  {storesPhoto
+                    ? 'Classified when you submit.'
+                    : result
+                      ? result.type
+                      : 'Take a photo to classify…'}
                 </ThemedText>
               </View>
             ) : (
@@ -264,7 +323,16 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
             )}
 
             {/* Severity — model-assigned, read only (photo flow only) */}
-            {isPhoto && <SeverityResult result={result} />}
+            {isPhoto && (
+              <SeverityResult
+                result={storesPhoto ? null : result}
+                empty={
+                  storesPhoto
+                    ? 'Severity is scored from the photo when the report is stored.'
+                    : undefined
+                }
+              />
+            )}
 
             {/* Description (required for manual) */}
             <View style={styles.labelRow}>
@@ -321,7 +389,20 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                     Floor{!isPhoto ? ' *' : ''}
                   </ThemedText>
                 </View>
-                <Dropdown value={floor} onChange={setFloor} options={CDS_FLOORS} />
+                <Dropdown
+                  value={floor}
+                  onChange={(value) => {
+                    setFloor(value);
+                    if (value === 2) {
+                      setResult(null);
+                      return;
+                    }
+                    if (isPhoto && photoUri && position) {
+                      void runClassifier(photoUri, coords, value);
+                    }
+                  }}
+                  options={CDS_FLOORS}
+                />
 
                 <View style={styles.labelRow}>
                   <ThemedText type="smallBold" style={styles.label}>
@@ -338,10 +419,9 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                   userDot={userDot}
                   onPlace={(p) => {
                     setPosition(p);
-                    // Re-score with the new spatial context if we have a photo.
-                    if (isPhoto && photoUri) {
+                    if (isPhoto && photoUri && floor !== 2) {
                       const ctx = buildSpatialContext(floor, p, coords);
-                      classifyHazard(photoUri, ctx).then(setResult);
+                      classifyHazard(photoUri, ctx).then(setResult).catch(() => setResult(null));
                     }
                   }}
                   showFeatures
@@ -350,6 +430,12 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               </>
             )}
           </ScrollView>
+
+          {submitError ? (
+            <ThemedText type="small" style={styles.submitError}>
+              {submitError}
+            </ThemedText>
+          ) : null}
 
           {/* Submit */}
           <Pressable
@@ -363,11 +449,13 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
             <ThemedText
               type="smallBold"
               style={{ color: canSubmit ? '#fff' : theme.textSecondary }}>
-              {analyzing
-                ? 'Analyzing…'
-                : !isPhoto && missingManual.length
-                  ? `Add ${missingManual.join(' & ')} to submit`
-                  : 'Submit report'}
+              {submitting
+                ? 'Saving report…'
+                : analyzing
+                  ? 'Analyzing…'
+                  : !isPhoto && missingManual.length
+                    ? `Add ${missingManual.join(' & ')} to submit`
+                    : 'Submit report'}
             </ThemedText>
           </Pressable>
         </View>
@@ -382,10 +470,29 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   );
 }
 
+function clientHazardType(hazardType: StoredHazardType): HazardType {
+  switch (hazardType) {
+    case 'spill':
+      return 'Spill';
+    case 'blockage':
+      return 'Blocked path';
+    case 'elevator':
+      return 'Broken elevator';
+    case 'entrance':
+      return 'Broken door';
+    case 'walking_surface':
+      return 'Wet floor';
+    case 'other':
+      return 'Other';
+  }
+}
+
 function SeverityResult({
   result,
+  empty = 'Severity is scored from the photo and where you pin it.',
 }: {
   result: { severity: number; baseSeverity: number; locationBonus: number; reason: string } | null;
+  empty?: string;
 }) {
   const theme = useTheme();
   return (
@@ -418,7 +525,7 @@ function SeverityResult({
           </>
         ) : (
           <ThemedText type="small" themeColor="textSecondary">
-            Severity is scored from the photo and where you pin it.
+            {empty}
           </ThemedText>
         )}
       </View>
@@ -550,6 +657,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   preview: { width: '100%', aspectRatio: 16 / 9, borderRadius: Spacing.three },
+  submitError: { color: BU.red, marginBottom: Spacing.two },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
