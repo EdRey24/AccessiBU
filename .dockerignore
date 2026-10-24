@@ -1,0 +1,12 @@
+node_modules
+.expo
+dist
+web-build
+.git
+ios
+android
+backend/.venv
+backend/__pycache__
+**/__pycache__
+*.log
+.DS_Store

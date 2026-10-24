@@ -42,6 +42,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "web:clean": "expo start --web --clear",
+    "clean": "rm -rf .expo node_modules/.cache && echo 'Caches cleared. Run: npm run web:clean'",
     "lint": "expo lint"
   },
   "private": true

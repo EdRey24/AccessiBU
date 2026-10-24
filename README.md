@@ -1,56 +1,115 @@
-# Welcome to your Expo app 👋
+# AccessiBU
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Real-time, crowdsourced campus hazard navigation for Boston University. Report
+a hazard with a photo, get an AI-assigned severity, and see it pinned on a 3D
+campus map and the exact 2D floor plan.
 
-## Get started
+- **Frontend:** Expo (React Native) — runs on web, iOS, and Android
+- **Backend:** FastAPI + PostgreSQL
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## ⚠️ First-time setup (read this — it's why the app "doesn't load")
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+The app needs a **Mapbox token** to render the map. That token lives in a
+`.env` file which is **gitignored**, so a fresh clone has no token and the map
+comes up blank. Create it before running:
 
 ```bash
-npm run reset-project
+cp .env.example .env
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Then open `.env` and set `EXPO_PUBLIC_MAPBOX_TOKEN` to a Mapbox public token
+(free at https://account.mapbox.com/access-tokens/). Ask a teammate for the
+shared project token if you don't want to make your own.
 
-### Other setup steps
+---
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Option A — Run everything with Docker (recommended)
 
-## Learn more
+One command brings up the web app, the backend, and a Postgres database. You
+only need Docker Desktop installed — no Node, Python, or Postgres setup.
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+cp .env.example .env     # then fill in EXPO_PUBLIC_MAPBOX_TOKEN
+docker compose up --build
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Open:
 
-## Join the community
+- Web app: http://localhost:8081
+- Backend API docs: http://localhost:8000/docs
 
-Join our community of developers creating universal apps.
+To stop: `Ctrl+C`, then `docker compose down`.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+## Option B — Run the web app directly (no Docker)
+
+Requires **Node 22**. If you use `nvm`: `nvm use` (see `.nvmrc`).
+
+```bash
+cp .env.example .env     # then fill in EXPO_PUBLIC_MAPBOX_TOKEN
+npm install
+npm run web
+```
+
+Open the printed URL (usually http://localhost:8081). Press `w` if it doesn't
+open automatically.
+
+### Running on a phone / simulator
+
+```bash
+npm run ios        # iOS simulator (macOS + Xcode)
+npm run android    # Android emulator (Android Studio)
+```
+
+Native builds use the Mapbox SDK, which needs a dev build (`expo run:ios` /
+`expo run:android`) rather than Expo Go.
+
+---
+
+## Backend only (no Docker)
+
+Requires **Python 3.12** and a running Postgres.
+
+```bash
+cd backend
+cp .env.example .env     # set DATABASE_URL + JWT_SECRET
+pip install -e .
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+---
+
+## Troubleshooting
+
+- **Map is blank / grey / "map doesn't load":** `EXPO_PUBLIC_MAPBOX_TOKEN` is
+  missing or invalid in `.env`. Run `cp .env.example .env`, paste the token,
+  then **restart** the dev server (env vars are only read at startup).
+
+- **"Requiring unknown module 820" (or any number):** this is a stale Metro
+  bundler cache, not a missing package. It happens after pulling new code or
+  switching branches. Fix:
+
+  ```bash
+  npm run web:clean       # restarts with a cleared cache
+  ```
+
+  If it persists, do a full cache wipe:
+
+  ```bash
+  npm run clean           # removes .expo + Metro cache
+  npm run web:clean
+  ```
+
+- **`npm install` fails or behaves oddly:** make sure you're on Node 22
+  (`node --version`; `nvm use` if you have nvm). For a clean, lockfile-exact
+  install: `rm -rf node_modules && npm ci`.
+
+- **Changes to `.env` not picked up:** env vars are read at startup; stop and
+  restart the dev server (or `docker compose up` again).
+
+- **Port already in use:** stop whatever is on 8081/8000/5432, or change the
+  host port in `docker-compose.yml`.
