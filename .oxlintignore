@@ -1,0 +1,5 @@
+# Supabase Edge Functions run in the Deno runtime, not the Expo/TS app bundle.
+# They use Deno-only globals (Deno.env) and npm:/relative Deno import specifiers
+# that the app's oxlint/tsc config does not understand. They are linted/type-
+# checked by the Deno toolchain instead, so exclude them from the app gates.
+supabase/functions/

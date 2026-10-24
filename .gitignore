@@ -41,3 +41,10 @@ example
 # generated native folders
 /ios
 /android
+
+# Supabase Edge Functions local secrets (GEMINI_API_KEY etc.).
+# Per the Supabase docs the runtime reads these values, so the file must never
+# be committed. SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected by the
+# platform and need not live here in production.
+supabase/functions/.env
+supabase/.temp/
