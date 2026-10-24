@@ -5,7 +5,7 @@ AccessiBU keeps a shared record of physical hazards so people on campus can see 
 ## Language
 
 **Member**:
-A person with a @bu.edu email address who reports and browses hazards.
+A person registered under one address ending in @bu.edu who reports and browses hazards. The address does not change.
 _Avoid_: Student, user, account
 
 **Role**:
@@ -21,7 +21,7 @@ A real-world condition at a place, described by one or more Reports. It stays op
 _Avoid_: Issue, problem, pin
 
 **Report**:
-One submission from one Member about a Hazard, either a photo or text, and it cannot be withdrawn. A photo Report has a hazard type, a numeric category, and a summary. A text Report has a hazard type, a numeric category, and a description.
+One submission from one Member about a Hazard, either a photo or text, and it cannot be withdrawn. A photo Report has a picture, a hazard type, a numeric category, and a summary, and the picture stays when the Hazard is resolved. A text Report has a hazard type, a numeric category, and a description.
 _Avoid_: Pin, ticket
 
 **Hazard type**:
