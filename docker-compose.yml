@@ -1,4 +1,4 @@
-# AccessiBU — one command to run the whole stack locally.
+# AccessiBU — one command to run the web app and the API locally.
 #
 #   docker compose up
 #
@@ -6,38 +6,18 @@
 #   Web app  -> http://localhost:8081
 #   Backend  -> http://localhost:8000  (docs at /docs)
 #
-# The web service reads EXPO_PUBLIC_MAPBOX_TOKEN from your .env file (copy
-# .env.example to .env and fill it in first — the map needs it).
+# Postgres and Auth live in the shared hosted Supabase project. Copy
+# backend/.env.example to backend/.env and fill it in before starting.
+# The web service reads EXPO_PUBLIC_MAPBOX_TOKEN from your .env file.
 
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: accessibu
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d accessibu"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./backend
-    environment:
-      DATABASE_URL: postgresql+psycopg://user:password@db:5432/accessibu
-      JWT_SECRET: dev-secret-change-me
-      STORAGE_BUCKET: hazard-images
+    env_file:
+      - ./backend/.env
     ports:
       - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
 
   web:
     build:
@@ -46,12 +26,8 @@ services:
     env_file:
       - .env
     environment:
-      # Default the classifier at the local backend if not set in .env.
-      EXPO_PUBLIC_CLASSIFIER_URL: ${EXPO_PUBLIC_CLASSIFIER_URL:-http://localhost:8000/classify}
+      EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "8081:8081"
     depends_on:
       - backend
-
-volumes:
-  pgdata:

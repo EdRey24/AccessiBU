@@ -55,7 +55,8 @@
         {
           "locationWhenInUsePermission": "AccessiBU uses your location to auto-detect which building you're in when reporting a hazard."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

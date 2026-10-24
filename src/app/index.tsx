@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { CDS_FLOORS, floorLabel, type Hazard } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
+import { useSession } from '@/hooks/use-session';
 import { useTheme } from '@/hooks/use-theme';
 
 /** Either the 3D campus map, or a specific floor's 2D plan. */
@@ -16,6 +17,7 @@ type Screen = { kind: 'map' } | { kind: 'floor'; floor: number };
 
 export default function HomeScreen() {
   const theme = useTheme();
+  const { signOut } = useSession();
   const { hazards } = useHazards();
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [reportOpen, setReportOpen] = useState(false);
@@ -40,6 +42,15 @@ export default function HomeScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             {hazards.length} active
           </ThemedText>
+          <Pressable
+            style={[styles.alertsBtn, { borderColor: theme.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            onPress={() => {
+              void signOut();
+            }}>
+            <ThemedText type="small">Sign out</ThemedText>
+          </Pressable>
           <Pressable
             style={[styles.alertsBtn, { borderColor: theme.border }]}
             accessibilityRole="button"
