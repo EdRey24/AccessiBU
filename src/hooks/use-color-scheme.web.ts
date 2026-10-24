@@ -8,6 +8,8 @@ export function useColorScheme() {
   const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {
+    // Intentional post-hydration flag flip for static web rendering: we must flip this
+    // synchronously after mount so the client re-reads the real color scheme.
     setHasHydrated(true);
   }, []);
 
