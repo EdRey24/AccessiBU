@@ -1,0 +1,39 @@
+[project]
+name = "accessibu-backend"
+version = "0.1.0"
+description = "AccessiBU API for hazard reports and member authentication."
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.14",
+    "fastapi>=0.115",
+    "psycopg[binary]>=3.2",
+    "pwdlib[argon2]>=0.2",
+    "pydantic-settings>=2.6",
+    "pyjwt>=2.10",
+    "sqlalchemy>=2.0",
+    "uvicorn>=0.32",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 80
+target-version = "py312"
+src = ["app", "alembic"]
+
+[tool.ruff.lint]
+select = ["D", "E", "F", "I", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
