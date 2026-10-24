@@ -2,7 +2,8 @@
 
 A text report is JSON. A photo report is one image plus the place it
 belongs. The vision call fills the photo's hazard type, category,
-summary, and severity.
+summary, and severity. POST /classify previews that call without
+storing a report.
 """
 
 from typing import Annotated
@@ -15,6 +16,13 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.members.deps import current_member
 from app.members.models import Member
+from app.reports.classify import ClassificationError, classify
+from app.reports.preview import (
+    PreviewClassification,
+    PreviewContextError,
+    load_preview_context,
+    preview_classification,
+)
 from app.reports.schemas import (
     PhotoReport,
     ReportPlace,
@@ -24,12 +32,14 @@ from app.reports.schemas import (
 from app.reports.service import (
     MAX_IMAGE_BYTES,
     RejectedReport,
+    inspect_image,
     store_photo,
     store_text,
 )
 from app.reports.storage import StorageError
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+classify_router = APIRouter(tags=["classify"])
 
 
 @router.post("/text", response_model=TextReport, status_code=201)
@@ -94,6 +104,43 @@ async def create_photo_report(
             status_code=502,
             detail="Storage is unavailable.",
         ) from error
+
+
+@classify_router.post("/classify", response_model=PreviewClassification)
+async def classify_photo(
+    image: Annotated[UploadFile, File()],
+    context: Annotated[str | None, Form()] = None,
+    member: Member = Depends(current_member),
+) -> PreviewClassification:
+    """Classifies a photo without storing a report.
+
+    Args:
+        image: The captured photo.
+        context: JSON spatial context, when the pin is on a floor plan.
+        member: The signed-in member.
+
+    Returns:
+        A display type, a 1–10 severity, and a short description.
+
+    Raises:
+        HTTPException: The photo, the context, or the vision call was
+            rejected.
+    """
+    raw = await image.read(MAX_IMAGE_BYTES + 1)
+    try:
+        inspected = inspect_image(raw)
+        parsed = load_preview_context(context)
+        classification = classify(raw, inspected.media_type)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+    except PreviewContextError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except ClassificationError as error:
+        raise HTTPException(
+            status_code=422,
+            detail="The photo could not be classified.",
+        ) from error
+    return preview_classification(classification, parsed)
 
 
 def _place(
