@@ -1,11 +1,10 @@
 /**
  * AccessiBU hazard classifier client.
  *
- * This is the single integration point with the backend severity model your
- * teammates are building. The app sends the hazard PHOTO plus the resolved
- * SPATIAL CONTEXT (pin -> nearest stair/elevator, nearCriticalEgress, etc.),
- * and the backend returns the hazard type, a model-assigned severity, and a
- * short description.
+ * Preview classifier for reports that are not stored through the report API.
+ * A Floor 2 photo is stored by submitPhotoReport, which classifies the image.
+ * This client sends the PHOTO plus the resolved SPATIAL CONTEXT and expects
+ * a hazard type, a 1–10 severity, and a short description.
  *
  * Contract (POST multipart/form-data to ${EXPO_PUBLIC_API_URL}/classify):
  *   - field "image":   the captured photo (file)

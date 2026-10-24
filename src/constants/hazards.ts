@@ -1,6 +1,6 @@
 /**
  * Domain model + static reference data for AccessiBU hazard reports.
- * UI-only for now; a backend will replace the in-memory store later.
+ * A Floor 2 photo is stored through the report API. Other reports stay in memory.
  */
 
 import { floorFeatures, type FeatureKind, type FloorFeature } from './floor-features';
@@ -31,10 +31,37 @@ export const HAZARD_TYPES: HazardType[] = [
 export type ReportMethod = 'photo' | 'manual';
 export type Location = 'inside' | 'outside';
 
+/** Hazard type stored on a report. */
+export type StoredHazardType =
+  | 'spill'
+  | 'blockage'
+  | 'elevator'
+  | 'entrance'
+  | 'walking_surface'
+  | 'other';
+
+const STORED_HAZARD_LABEL: Record<StoredHazardType, string> = {
+  spill: 'Spill',
+  blockage: 'Blockage',
+  elevator: 'Elevator',
+  entrance: 'Entrance',
+  walking_surface: 'Walking surface',
+  other: 'Other',
+};
+
+/** Label for a hazard type returned by the report API. */
+export function storedHazardLabel(hazardType: StoredHazardType): string {
+  return STORED_HAZARD_LABEL[hazardType];
+}
+
 export type Hazard = {
   id: string;
   type: HazardType;
-  severity: number; // 1-10, model-assigned
+  severity: number; // 1-10, used for pin color
+  /** Passage interference from the stored hazard, 0–100. */
+  severityScore?: number | null;
+  /** Hazard type written by classification, when this pin was stored. */
+  hazardType?: StoredHazardType | null;
   description: string;
   location: Location;
   floor: number | null; // null when outside

@@ -1,0 +1,141 @@
+"""Report submission routes.
+
+A text report is JSON. A photo report is one image plus the place it
+belongs. The vision call fills the photo's hazard type, category,
+summary, and severity.
+"""
+
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import ValidationError
+from sqlalchemy.orm import Session
+
+from app.db import get_db
+from app.members.deps import current_member
+from app.members.models import Member
+from app.reports.schemas import (
+    PhotoReport,
+    ReportPlace,
+    TextReport,
+    TextReportSubmit,
+)
+from app.reports.service import (
+    MAX_IMAGE_BYTES,
+    RejectedReport,
+    store_photo,
+    store_text,
+)
+from app.reports.storage import StorageError
+
+router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+@router.post("/text", response_model=TextReport, status_code=201)
+def create_text_report(
+    submission: TextReportSubmit,
+    member: Member = Depends(current_member),
+    db: Session = Depends(get_db),
+) -> TextReport:
+    """Stores a text report.
+
+    Args:
+        submission: The text and where it belongs.
+        member: The signed-in member.
+        db: Open database session.
+
+    Returns:
+        The stored text report.
+
+    Raises:
+        HTTPException: The hazard cannot take the report.
+    """
+    try:
+        return store_text(db, member, submission)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+
+
+@router.post("/photo", response_model=PhotoReport, status_code=201)
+async def create_photo_report(
+    image: Annotated[UploadFile, File()],
+    latitude: Annotated[float | None, Form()] = None,
+    longitude: Annotated[float | None, Form()] = None,
+    hazard_id: Annotated[UUID | None, Form()] = None,
+    member: Member = Depends(current_member),
+    db: Session = Depends(get_db),
+) -> PhotoReport:
+    """Stores a photo report.
+
+    Args:
+        image: The captured photo.
+        latitude: North-south coordinate of a new hazard.
+        longitude: East-west coordinate of a new hazard.
+        hazard_id: An open hazard to attach to.
+        member: The signed-in member.
+        db: Open database session.
+
+    Returns:
+        The stored photo report.
+
+    Raises:
+        HTTPException: The photo or the hazard was rejected, or storage
+            is unavailable.
+    """
+    place = _place(latitude, longitude, hazard_id)
+    raw = await image.read(MAX_IMAGE_BYTES + 1)
+    try:
+        return store_photo(db, member, raw, place)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+    except StorageError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Storage is unavailable.",
+        ) from error
+
+
+def _place(
+    latitude: float | None,
+    longitude: float | None,
+    hazard_id: UUID | None,
+) -> ReportPlace:
+    """Validates where a photo belongs.
+
+    Args:
+        latitude: North-south coordinate of a new hazard.
+        longitude: East-west coordinate of a new hazard.
+        hazard_id: An open hazard to attach to.
+
+    Returns:
+        The validated place.
+
+    Raises:
+        HTTPException: The place is incomplete or out of range.
+    """
+    try:
+        return ReportPlace.model_validate(
+            {
+                "latitude": latitude,
+                "longitude": longitude,
+                "hazard_id": hazard_id,
+            },
+        )
+    except ValidationError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=error.errors(),
+        ) from error
+
+
+def _rejected(error: RejectedReport) -> HTTPException:
+    """Maps a rejected submission to an HTTP error.
+
+    Args:
+        error: The rejection from the report service.
+
+    Returns:
+        The HTTP error the route raises.
+    """
+    return HTTPException(status_code=error.status_code, detail=error.detail)

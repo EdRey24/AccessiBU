@@ -209,10 +209,7 @@ def _jwks_client() -> jwt.PyJWKClient:
         A client that fetches and caches the project's signing keys.
     """
     settings = get_settings()
-    url = (
-        f"{settings.supabase_url.rstrip('/')}"
-        "/auth/v1/.well-known/jwks.json"
-    )
+    url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
     return jwt.PyJWKClient(
         url,
         headers={"apikey": settings.supabase_anon_key},

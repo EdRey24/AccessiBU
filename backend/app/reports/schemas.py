@@ -1,15 +1,21 @@
 """Photo and text report bodies.
 
-Classification and TextReportCreate are not tables. A later submit
-route copies TextReportCreate.severity_score onto the hazard. A photo
-score will come from Classification.severity_score the same way.
+Classification, TextReportCreate, and the submit models are not tables.
+A text submission carries its own severity. A photo submission carries
+a place, and the vision call supplies the severity.
 """
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.reports.models import HazardType
 
@@ -99,6 +105,61 @@ class TextReportCreate(BaseModel):
     category: int
     description: str = Field(min_length=1)
     severity_score: int = Field(ge=0, le=100)
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str) -> str:
+        """Drops surrounding whitespace.
+
+        Args:
+            value: The text the member wrote.
+
+        Returns:
+            The stripped description.
+
+        Raises:
+            ValueError: The description is empty.
+        """
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("A description is required.")
+        return cleaned
+
+
+class ReportPlace(BaseModel):
+    """Where a submission is stored. Not a table.
+
+    Attributes:
+        latitude: North-south coordinate of a new hazard.
+        longitude: East-west coordinate of a new hazard.
+        hazard_id: An open hazard to attach to. Omit to open one.
+    """
+
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    hazard_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def _place(self) -> Self:
+        """Requires a place when the submission opens a hazard.
+
+        Returns:
+            This place.
+
+        Raises:
+            ValueError: A new hazard has no coordinates.
+        """
+        if self.hazard_id is None and (
+            self.latitude is None or self.longitude is None
+        ):
+            raise ValueError(
+                "A new hazard needs a latitude and a longitude.",
+            )
+        return self
+
+
+class TextReportSubmit(TextReportCreate, ReportPlace):
+    """A text submission and where it belongs. Not a table."""
 
 
 Report = Annotated[PhotoReport | TextReport, Field(discriminator="kind")]

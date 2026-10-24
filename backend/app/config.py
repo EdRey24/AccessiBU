@@ -2,9 +2,8 @@
 
 Required names are DATABASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY,
 SUPABASE_SERVICE_ROLE_KEY, and STORAGE_BUCKET. CORS_ORIGINS is
-optional. The service role key and storage bucket are unused by the
-current routes. They are loaded now so later image uploads do not
-introduce a new required variable.
+optional. The service role key uploads photo bytes. The vision call
+reads its own environment variables and does not use these settings.
 """
 
 from functools import lru_cache
@@ -21,9 +20,9 @@ class Settings(BaseSettings):
         supabase_url: Project URL, without a trailing path.
         supabase_anon_key: Anon key used to call Supabase Auth. It stays
             on the server.
-        supabase_service_role_key: Service role key reserved for later
-            uploads. Unused by the current routes.
-        storage_bucket: Object-storage bucket reserved for image uploads.
+        supabase_service_role_key: Service role key used to upload and
+            delete photo objects. It stays on the server.
+        storage_bucket: Object-storage bucket for photo reports.
         cors_origins: Comma-separated browser origins allowed to call
             the API.
     """
