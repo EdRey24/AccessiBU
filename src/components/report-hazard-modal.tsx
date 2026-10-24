@@ -2,34 +2,32 @@ import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
     Modal,
     Pressable,
     ScrollView,
     StyleSheet,
     TextInput,
-    View,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
     buildSpatialContext,
     CDS_FLOORS,
-    CDS_LOCATION,
     floorLabel,
     floorPlanImage,
     gpsToPlanXY,
     isAtCDS,
+    planXYToGps,
     type Location as HazardLocation,
     type HazardType,
     type ReportMethod,
-    type StoredHazardType,
+    type StoredHazardType
 } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/services/api';
-import { classifyHazard } from '@/services/classifier';
 import { resolveFloor2Location } from '@/services/floor-geo';
 import { submitTextReport } from '@/services/hazards';
 import { pinSeverity, submitPhotoReport } from '@/services/reports';
@@ -56,21 +54,9 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
-  const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  // The model result (type, severity, description) — null until classified.
-  const [result, setResult] = useState<{
-    type: HazardType;
-    severity: number;
-    baseSeverity: number;
-    locationBonus: number;
-    description: string;
-    reason: string;
-    fromBackend: boolean;
-  } | null>(null);
-
-  // Manual-report fields (editable only when there's no photo/model result).
+  // Manual-report fields (used only by the manual flow).
   const [manualType, setManualType] = useState<HazardType>('Spill');
   const [description, setDescription] = useState('');
 
@@ -82,7 +68,6 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   const [position, setPosition] = useState<{ x: number; y: number } | null>({ x: 0.5, y: 0.5 });
 
   const isPhoto = method === 'photo';
-  const effectiveType = result ? result.type : manualType;
   // "You are here" dot: project the user's GPS onto the floor plan (approximate
   // indoors, so the user still drags the pin to the exact spot).
   const userDot = coords ? gpsToPlanXY(coords) : null;
@@ -90,10 +75,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   const reset = () => {
     setMethod('photo');
     setPhotoUri(null);
-    setAnalyzing(false);
     setSubmitting(false);
     setSubmitError(null);
-    setResult(null);
     setManualType('Spill');
     setDescription('');
     setLocation('inside');
@@ -134,66 +117,47 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     }
   };
 
-  // Run the classifier whenever we have a photo + a pin (so spatial context is
-  // available). Re-runs if the pin or floor changes materially.
-  const runClassifier = async (uri: string | null, gps: Coords | null, nextFloor = floor) => {
-    const inside = gps ? isAtCDS(gps) : location === 'inside';
-    if (!position || (nextFloor === 2 && inside)) return;
-    setAnalyzing(true);
-    try {
-      const ctx = buildSpatialContext(nextFloor, position, gps);
-      setResult(await classifyHazard(uri, ctx));
-    } catch {
-      setResult(null);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
-  // Photo captured -> detect building. An inside Floor 2 photo is classified
-  // when the report is stored. Anywhere else still uses the preview classifier.
+  // Photo captured -> detect the building so GPS is available. The photo is
+  // classified by the backend when the report is stored.
   const handleCapture = async (uri: string) => {
     setPhotoUri(uri);
     setCameraOpen(false);
-    const gps = await detectBuilding();
-    const staysInside = gps ? isAtCDS(gps) : true;
-    if (floor === 2 && staysInside) return;
-    await runClassifier(uri, gps);
+    await detectBuilding();
   };
 
-  // Validation. Photo flow needs a model result; manual flow requires the
-  // fields the backend needs (description, floor, pin) since there's no image.
-  const manualValid =
-    description.trim().length > 0 &&
-    (location === 'outside' || (floor !== null && position !== null));
-  const storesPhoto = isPhoto && location === 'inside' && floor === 2 && !!photoUri && !!position;
-  const canSubmit =
-    !analyzing &&
-    !submitting &&
-    (storesPhoto ||
-      (isPhoto
-        ? !!result && (location === 'outside' || position !== null)
-        : manualValid));
+  // Real-world coordinate this report is stored at. Floor 2 pins use the
+  // digitized room map. Other floors project the pin onto the georeferenced
+  // plan. Outside CDS there is no pin, so the GPS fix is the location.
+  const resolved =
+    location === 'inside' && position && floor === 2 ? resolveFloor2Location(position) : null;
+  const coordinate: { latitude: number; longitude: number } | null =
+    location === 'inside'
+      ? position
+        ? (resolved?.coordinate ?? planXYToGps(position))
+        : null
+      : coords
+        ? { latitude: coords.latitude, longitude: coords.longitude }
+        : null;
+
+  // Validation. Both flows need a coordinate so every device can place the
+  // hazard. A manual report also needs a description.
+  const manualValid = description.trim().length > 0 && coordinate !== null;
+  const storesPhoto = isPhoto && !!photoUri && coordinate !== null;
+  const canSubmit = !submitting && (isPhoto ? storesPhoto : manualValid);
 
   const submit = async () => {
-    if (!canSubmit || submitting) return;
+    if (!canSubmit || submitting || !coordinate) return;
     const spatialContext =
       location === 'inside' && position ? buildSpatialContext(floor, position, coords) : null;
 
-    // Resolve the pin to its room + real coordinate (Floor 2 is digitized).
-    const resolved =
-      location === 'inside' && position && floor === 2
-        ? resolveFloor2Location(position)
-        : null;
-
-    if (isPhoto && photoUri && resolved) {
+    if (isPhoto && photoUri) {
       setSubmitting(true);
       setSubmitError(null);
       try {
         const stored = await submitPhotoReport({
           uri: photoUri,
-          latitude: resolved.coordinate.latitude,
-          longitude: resolved.coordinate.longitude,
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
         });
         addHazard({
           id: stored.hazardId,
@@ -204,13 +168,13 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
           severityScore: stored.severityScore,
           description: stored.summary,
           location,
-          floor,
-          position,
+          floor: location === 'inside' ? floor : null,
+          position: location === 'inside' ? position : null,
           method,
           photoUri,
           spatialContext,
-          room: resolved.room,
-          coordinate: resolved.coordinate,
+          room: resolved?.room ?? null,
+          coordinate: { latitude: coordinate.latitude, longitude: coordinate.longitude },
         });
         close();
       } catch (error) {
@@ -223,21 +187,16 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
       return;
     }
 
-    // Manual (and non-Floor-2 photo) reports now persist to the backend so
-    // other devices see them. Resolve a real coordinate: a digitized Floor 2
-    // pin is exact; otherwise fall back to GPS, then the CDS building center.
-    const severity = result ? result.severity : 5;
-    const coordinate =
-      resolved?.coordinate ??
-      (coords
-        ? { latitude: coords.latitude, longitude: coords.longitude }
-        : { latitude: CDS_LOCATION.latitude, longitude: CDS_LOCATION.longitude });
+    // Manual reports persist to the backend at the same coordinate so other
+    // devices see them.
+    // A manual report has no model score, so it starts at a middling severity.
+    const severity = 5;
 
     setSubmitting(true);
     setSubmitError(null);
     try {
       const stored = await submitTextReport({
-        type: effectiveType,
+        type: manualType,
         description: description.trim(),
         severity,
         latitude: coordinate.latitude,
@@ -246,7 +205,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
       addHazard({
         id: stored.hazardId,
         createdAt: stored.createdAt,
-        type: effectiveType,
+        type: manualType,
         hazardType: stored.hazardType,
         severity,
         severityScore: stored.severityScore,
@@ -257,7 +216,6 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
         method,
         photoUri,
         spatialContext,
-        severityReason: result?.reason,
         room: resolved?.room ?? null,
         coordinate,
       });
@@ -272,10 +230,9 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   };
 
   const missingManual: string[] = [];
-  if (!isPhoto) {
-    if (!description.trim()) missingManual.push('description');
-    if (location === 'inside' && !position) missingManual.push('pin');
-  }
+  if (isPhoto && !photoUri) missingManual.push('photo');
+  if (!isPhoto && !description.trim()) missingManual.push('description');
+  if (!coordinate) missingManual.push(location === 'inside' ? 'pin' : 'GPS location');
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
@@ -308,7 +265,6 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                 active={method === 'photo'}
                 onPress={() => {
                   setMethod('photo');
-                  setResult(null);
                   setCameraOpen(true);
                 }}
               />
@@ -319,7 +275,6 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                 onPress={() => {
                   setMethod('manual');
                   setPhotoUri(null);
-                  setResult(null);
                   detectBuilding();
                 }}
               />
@@ -329,41 +284,25 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               <Image source={{ uri: photoUri }} style={styles.preview} contentFit="cover" />
             )}
 
-            {/* AI analysis status */}
-            {analyzing && (
-              <View style={[styles.banner, { backgroundColor: theme.backgroundElement }]}>
-                <ActivityIndicator color={BU.red} />
-                <ThemedText type="small">Classifying hazard & scoring severity…</ThemedText>
-              </View>
-            )}
-
             {/* Hazard type */}
             <ThemedText type="smallBold" style={styles.label}>
               Hazard type
             </ThemedText>
             {isPhoto ? (
               <View style={[styles.readonlyField, { borderColor: theme.border }]}>
-                <ThemedText type="default" themeColor={result ? 'text' : 'textSecondary'}>
-                  {storesPhoto
-                    ? 'Classified when you submit.'
-                    : result
-                      ? result.type
-                      : 'Take a photo to classify…'}
+                <ThemedText type="default" themeColor={storesPhoto ? 'text' : 'textSecondary'}>
+                  {storesPhoto ? 'Classified when you submit.' : 'Take a photo to classify…'}
                 </ThemedText>
               </View>
             ) : (
               <HazardTypeDropdown value={manualType} onChange={setManualType} />
             )}
 
-            {/* Severity — model-assigned, read only (photo flow only) */}
+            {/* Severity — model-assigned when the photo is stored (photo flow only) */}
             {isPhoto && (
               <SeverityResult
-                result={storesPhoto ? null : result}
-                empty={
-                  storesPhoto
-                    ? 'Severity is scored from the photo when the report is stored.'
-                    : undefined
-                }
+                result={null}
+                empty="Severity is scored from the photo when the report is stored."
               />
             )}
 
@@ -424,16 +363,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                 </View>
                 <Dropdown
                   value={floor}
-                  onChange={(value) => {
-                    setFloor(value);
-                    if (value === 2) {
-                      setResult(null);
-                      return;
-                    }
-                    if (isPhoto && photoUri && position) {
-                      void runClassifier(photoUri, coords, value);
-                    }
-                  }}
+                  onChange={setFloor}
+
                   options={CDS_FLOORS}
                 />
 
@@ -450,13 +381,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                   floor={floor}
                   draftPin={position}
                   userDot={userDot}
-                  onPlace={(p) => {
-                    setPosition(p);
-                    if (isPhoto && photoUri && floor !== 2) {
-                      const ctx = buildSpatialContext(floor, p, coords);
-                      classifyHazard(photoUri, ctx).then(setResult).catch(() => setResult(null));
-                    }
-                  }}
+                  onPlace={setPosition}
+
                   showFeatures
                   caption={floorLabel(floor)}
                 />
@@ -483,12 +409,12 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               type="smallBold"
               style={{ color: canSubmit ? '#fff' : theme.textSecondary }}>
               {submitting
-                ? 'Saving report…'
-                : analyzing
-                  ? 'Analyzing…'
-                  : !isPhoto && missingManual.length
-                    ? `Add ${missingManual.join(' & ')} to submit`
-                    : 'Submit report'}
+                ? isPhoto
+                  ? 'Classifying and saving…'
+                  : 'Saving report…'
+                : missingManual.length
+                  ? `Add ${missingManual.join(' & ')} to submit`
+                  : 'Submit report'}
             </ThemedText>
           </Pressable>
         </View>

@@ -178,7 +178,8 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
     const draw = () => {
       hazardMarkersRef.current.forEach((m) => m.remove());
       hazardMarkersRef.current = [];
-      inside.forEach((h, i) => {
+      hazards.forEach((h) => {
+        if (!h.coordinate) return;
         const el = document.createElement('div');
         el.textContent = String(h.severity);
         el.setAttribute('role', 'button');
@@ -202,10 +203,7 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
           onSelectHazard(h);
         });
         const marker = new mapboxgl.Marker({ element: el })
-          .setLngLat([
-            CDS_LOCATION.longitude + (i % 3) * 0.00009 - 0.00009,
-            CDS_LOCATION.latitude + Math.floor(i / 3) * 0.00007 + 0.00006,
-          ])
+          .setLngLat([h.coordinate.longitude, h.coordinate.latitude])
           .addTo(map);
         hazardMarkersRef.current.push(marker);
       });
@@ -213,7 +211,6 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
 
     if (map.loaded()) draw();
     else map.once('load', draw);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hazards, onSelectHazard]);
 
   return (

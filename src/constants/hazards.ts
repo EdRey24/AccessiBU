@@ -347,6 +347,33 @@ export function gpsToPlanXY(coord: {
   return { x: clamp01(u), y: clamp01(v) };
 }
 
+/**
+ * Inverse of `gpsToPlanXY`: converts a normalized floor-plan pin (0-1) into a
+ * lat/lng by bilinear interpolation over the four georeferenced plan corners.
+ * Used to give pins on floors without their own room geometry a real
+ * coordinate to store. Accuracy is limited by the corner estimates above.
+ */
+export function planXYToGps(pin: { x: number; y: number }): {
+  latitude: number;
+  longitude: number;
+} {
+  const c = CDS_PLAN_CORNERS;
+  const u = clamp01(pin.x);
+  const v = clamp01(pin.y);
+  const top = {
+    latitude: lerp(c.topLeft.latitude, c.topRight.latitude, u),
+    longitude: lerp(c.topLeft.longitude, c.topRight.longitude, u),
+  };
+  const bottom = {
+    latitude: lerp(c.bottomLeft.latitude, c.bottomRight.latitude, u),
+    longitude: lerp(c.bottomLeft.longitude, c.bottomRight.longitude, u),
+  };
+  return {
+    latitude: lerp(top.latitude, bottom.latitude, v),
+    longitude: lerp(top.longitude, bottom.longitude, v),
+  };
+}
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }

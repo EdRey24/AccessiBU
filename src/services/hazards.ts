@@ -12,7 +12,7 @@ import type {
   HazardType,
   StoredHazardType,
 } from '@/constants/hazards';
-import { storedHazardLabel } from '@/constants/hazards';
+import { isAtCDS, storedHazardLabel } from '@/constants/hazards';
 import { ApiError, apiFetch, apiUrl } from '@/services/api';
 
 /** A hazard row as the backend returns it (GET /hazards). */
@@ -23,6 +23,9 @@ type HazardBody = {
   status: 'open' | 'resolved';
   created_at: string;
   severity_score: number;
+  hazard_type: StoredHazardType | null;
+  description: string | null;
+  report_count: number;
 };
 
 /** A stored text report as the backend returns it (POST /reports/text). */
@@ -105,6 +108,8 @@ export async function listHazards(): Promise<Hazard[]> {
   return body
     .map(parseHazard)
     .filter((row): row is HazardBody => row !== null)
+    // Resolved hazards and old clear-path photos (score 0) are not hazards.
+    .filter((row) => row.status === 'open' && row.severity_score > 0)
     .map(toHazard);
 }
 
@@ -141,14 +146,16 @@ export async function submitTextReport(input: TextReportInput): Promise<Submitte
 /** Builds a local Hazard from a backend hazard row. */
 function toHazard(row: HazardBody): Hazard {
   const createdAt = Date.parse(row.created_at);
+  const coordinate = { longitude: row.longitude, latitude: row.latitude };
   return {
     id: row.id,
-    type: 'Other',
+    type: row.hazard_type ? TYPE_FROM_STORED[row.hazard_type] : 'Other',
     severity: pinSeverityFromScore(row.severity_score),
     severityScore: row.severity_score,
-    hazardType: null,
-    description: 'Reported hazard',
-    location: 'inside',
+    hazardType: row.hazard_type,
+    description: row.description ?? 'Reported hazard',
+    // The shared row stores a coordinate only, so the floor is unknown here.
+    location: isAtCDS(coordinate) ? 'inside' : 'outside',
     floor: null,
     position: null,
     method: 'manual',
@@ -156,7 +163,7 @@ function toHazard(row: HazardBody): Hazard {
     createdAt: Number.isNaN(createdAt) ? Date.now() : createdAt,
     spatialContext: null,
     room: null,
-    coordinate: { longitude: row.longitude, latitude: row.latitude },
+    coordinate,
   };
 }
 
@@ -183,6 +190,10 @@ function parseHazard(body: unknown): HazardBody | null {
   ) {
     return null;
   }
+  const hazardType =
+    typeof row.hazard_type === 'string' && row.hazard_type in TYPE_FROM_STORED
+      ? (row.hazard_type as StoredHazardType)
+      : null;
   return {
     id: row.id,
     latitude: row.latitude,
@@ -190,6 +201,9 @@ function parseHazard(body: unknown): HazardBody | null {
     status: row.status,
     created_at: row.created_at,
     severity_score: row.severity_score,
+    hazard_type: hazardType,
+    description: typeof row.description === 'string' ? row.description : null,
+    report_count: typeof row.report_count === 'number' ? row.report_count : 0,
   };
 }
 

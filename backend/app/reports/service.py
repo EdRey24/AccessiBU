@@ -8,10 +8,11 @@ onto the hazard directly.
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.hazards.models import Hazard, HazardStatus
+from app.hazards.schemas import Hazard as HazardBody
 from app.members.models import Member
 from app.reports.models import Report, ReportKind
 from app.reports.schemas import (
@@ -24,6 +25,9 @@ from app.reports.schemas import (
 from app.reports.storage import StorageError, delete_object, put_object
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
+# The vision prompt defines 0 as a clear path. A photo scored below this
+# is not stored, so it never opens a hazard.
+MIN_HAZARD_SEVERITY = 1
 
 _HEIC_BRANDS = {
     b"heic",
@@ -135,6 +139,11 @@ def store_photo(
     put_object(path, image, inspected.media_type)
     try:
         classification = _classify(image, inspected.media_type)
+        if classification.severity_score < MIN_HAZARD_SEVERITY:
+            raise RejectedReport(
+                422,
+                "No hazard was found in this photo.",
+            )
         hazard = _hazard(db, place, classification.severity_score)
         row = _photo_row(report_id, path, member, hazard, classification)
         db.add(row)
@@ -202,6 +211,48 @@ def report_body(row: Report) -> PhotoReport | TextReport:
         return PhotoReport.model_validate(payload)
     payload["description"] = row.description
     return TextReport.model_validate(payload)
+
+
+def hazard_bodies(db: Session, hazards: list[Hazard]) -> list[HazardBody]:
+    """Builds hazard responses that carry their newest report's detail.
+
+    Args:
+        db: Open database session.
+        hazards: Stored hazards, in the order to return them.
+
+    Returns:
+        One body per hazard with its type, description, and report
+        count. A hazard with no report has no type or description.
+    """
+    if not hazards:
+        return []
+    ids = [hazard.id for hazard in hazards]
+    newest = {
+        row.hazard_id: row
+        for row in db.scalars(
+            select(Report)
+            .where(Report.hazard_id.in_(ids))
+            .distinct(Report.hazard_id)
+            .order_by(Report.hazard_id, Report.created_at.desc()),
+        ).all()
+    }
+    counts = dict(
+        db.execute(
+            select(Report.hazard_id, func.count())
+            .where(Report.hazard_id.in_(ids))
+            .group_by(Report.hazard_id),
+        ).all(),
+    )
+    bodies = []
+    for hazard in hazards:
+        body = HazardBody.model_validate(hazard)
+        report = newest.get(hazard.id)
+        if report is not None:
+            body.hazard_type = report.hazard_type
+            body.description = report.description or report.summary
+        body.report_count = counts.get(hazard.id, 0)
+        bodies.append(body)
+    return bodies
 
 
 def list_reports(db: Session, hazard_id: uuid.UUID) -> list[Report]:

@@ -28,6 +28,11 @@ const CHIP_MIN_ZOOM = 15.5;
 export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusMapProps) {
   const insideHazards = hazards.filter((h) => h.location === 'inside');
   const count = insideHazards.length;
+  // Every known hazard with a real coordinate gets a pin, wherever it was
+  // reported, so all devices draw the same shared set.
+  const pinnedHazards = hazards.flatMap((h) =>
+    h.coordinate ? [{ ...h, coordinate: h.coordinate }] : [],
+  );
   const [zoom, setZoom] = useState(16.8);
   const showChip = zoom >= CHIP_MIN_ZOOM;
 
@@ -83,13 +88,8 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
 
         {/* Individual hazard pins */}
         {showChip &&
-          insideHazards.map((h, i) => (
-            <MarkerView
-              key={h.id}
-              coordinate={[
-                CDS_LOCATION.longitude + (i % 3) * 0.00012 - 0.00012,
-                CDS_LOCATION.latitude + Math.floor(i / 3) * 0.0001 + 0.0002,
-              ]}>
+          pinnedHazards.map((h) => (
+            <MarkerView key={h.id} coordinate={[h.coordinate.longitude, h.coordinate.latitude]}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`${h.type}, severity ${h.severity}. Tap to view on floor plan.`}
