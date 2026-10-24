@@ -5,7 +5,7 @@ a hazard with a photo, get an AI-assigned severity, and see it pinned on a 3D
 campus map and the exact 2D floor plan.
 
 - **Frontend:** Expo (React Native) — runs on web, iOS, and Android
-- **Backend:** FastAPI + PostgreSQL
+- **Backend:** FastAPI, with Postgres and Auth in a shared Supabase project
 
 ---
 
@@ -27,13 +27,24 @@ shared project token if you don't want to make your own.
 
 ## Option A — Run everything with Docker (recommended)
 
-One command brings up the web app, the backend, and a Postgres database. You
-only need Docker Desktop installed — no Node, Python, or Postgres setup.
+One command brings up the web app and the backend. Postgres and member
+sign-in live in the shared hosted Supabase project, so there is no local
+database. You need Docker Desktop, plus the Supabase values in `backend/.env`.
 
 ```bash
-cp .env.example .env     # then fill in EXPO_PUBLIC_MAPBOX_TOKEN
+cp .env.example .env                 # then fill in EXPO_PUBLIC_MAPBOX_TOKEN
+cp backend/.env.example backend/.env # then fill in the Supabase values
 docker compose up --build
 ```
+
+In the Supabase dashboard for that project:
+
+- Turn **Confirm email** off. Signing up signs the member in immediately.
+- Set **Site URL** to `http://localhost:8081` so password-reset links open the
+  local web app. Once the app is deployed, point Site URL at that web origin.
+- Enable **JWT signing keys**. The API checks access tokens against the
+  project's published keys and rejects shared-secret (HS256) tokens.
+- Add the deployed web origin to `CORS_ORIGINS` when you leave localhost.
 
 Open:
 
@@ -71,11 +82,13 @@ Native builds use the Mapbox SDK, which needs a dev build (`expo run:ios` /
 
 ## Backend only (no Docker)
 
-Requires **Python 3.12** and a running Postgres.
+Requires **Python 3.12**. The database is the hosted Supabase Postgres, and
+the connection string belongs in `backend/.env` (see `backend/.env.example`).
+Apply the same Supabase dashboard settings listed under Option A.
 
 ```bash
 cd backend
-cp .env.example .env     # set DATABASE_URL + JWT_SECRET
+cp .env.example .env     # set DATABASE_URL and the Supabase keys
 pip install -e .
 alembic upgrade head
 uvicorn app.main:app --reload
@@ -111,5 +124,13 @@ uvicorn app.main:app --reload
 - **Changes to `.env` not picked up:** env vars are read at startup; stop and
   restart the dev server (or `docker compose up` again).
 
-- **Port already in use:** stop whatever is on 8081/8000/5432, or change the
+- **Port already in use:** stop whatever is on 8081 or 8000, or change the
   host port in `docker-compose.yml`.
+
+- **Sign-in says the API address is not configured:** set
+  `EXPO_PUBLIC_API_URL` in `.env` (for example `http://localhost:8000`) and
+  restart the dev server.
+
+- **Every sign-in fails with an invalid token:** the Supabase project is
+  still signing tokens with the legacy shared secret. Enable JWT signing
+  keys in the dashboard.

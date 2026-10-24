@@ -7,7 +7,7 @@
  * and the backend returns the hazard type, a model-assigned severity, and a
  * short description.
  *
- * Contract (POST multipart/form-data to EXPO_PUBLIC_CLASSIFIER_URL):
+ * Contract (POST multipart/form-data to ${EXPO_PUBLIC_API_URL}/classify):
  *   - field "image":   the captured photo (file)
  *   - field "context": JSON string of SpatialContext (see constants/hazards.ts)
  *
@@ -21,8 +21,8 @@
  *     "reason": "Within 0.04 of a staircase."   // optional explanation
  *   }
  *
- * If no endpoint is configured, a local mock stands in so the app stays
- * demoable end-to-end.
+ * If EXPO_PUBLIC_API_URL is unset, a local mock stands in so the app stays
+ * demoable end-to-end. A configured API never falls back to the mock.
  */
 
 import {
@@ -30,6 +30,7 @@ import {
   type SpatialContext,
   proximityToFeatures,
 } from '@/constants/hazards';
+import { apiFetch, apiUrl } from '@/services/api';
 
 export type ClassifierResult = {
   type: HazardType;
@@ -42,27 +43,16 @@ export type ClassifierResult = {
   fromBackend: boolean;
 };
 
-const ENDPOINT = process.env.EXPO_PUBLIC_CLASSIFIER_URL ?? '';
-
 export async function classifyHazard(
   photoUri: string | null,
   context: SpatialContext
 ): Promise<ClassifierResult> {
-  if (ENDPOINT && photoUri) {
-    try {
-      return await callBackend(ENDPOINT, photoUri, context);
-    } catch {
-      // Fall through to the local mock so a demo never hard-fails on network.
-    }
-  }
-  return mockClassify(photoUri, context);
+  if (!apiUrl) return mockClassify(photoUri, context);
+  if (!photoUri) throw new Error('A photo is required.');
+  return callBackend(photoUri, context);
 }
 
-async function callBackend(
-  endpoint: string,
-  photoUri: string,
-  context: SpatialContext
-): Promise<ClassifierResult> {
+async function callBackend(photoUri: string, context: SpatialContext): Promise<ClassifierResult> {
   const form = new FormData();
   // React Native / web both accept this shape for a file part.
   form.append('image', {
@@ -72,7 +62,7 @@ async function callBackend(
   } as any);
   form.append('context', JSON.stringify(context));
 
-  const res = await fetch(endpoint, { method: 'POST', body: form });
+  const res = await apiFetch('/classify', { method: 'POST', body: form });
   if (!res.ok) throw new Error(`classifier ${res.status}`);
   const data = await res.json();
   return {

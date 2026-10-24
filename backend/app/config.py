@@ -1,10 +1,10 @@
 """Process settings loaded from the environment.
 
 Required names are DATABASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY,
-SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET, and STORAGE_BUCKET.
-The service role key and storage bucket are unused by the current
-routes. They are loaded now so later image uploads do not introduce a
-new required variable.
+SUPABASE_SERVICE_ROLE_KEY, and STORAGE_BUCKET. CORS_ORIGINS is
+optional. The service role key and storage bucket are unused by the
+current routes. They are loaded now so later image uploads do not
+introduce a new required variable.
 """
 
 from functools import lru_cache
@@ -23,9 +23,9 @@ class Settings(BaseSettings):
             on the server.
         supabase_service_role_key: Service role key reserved for later
             uploads. Unused by the current routes.
-        supabase_jwt_secret: Shared secret used to verify access tokens.
-            This service does not sign tokens with it.
         storage_bucket: Object-storage bucket reserved for image uploads.
+        cors_origins: Comma-separated browser origins allowed to call
+            the API.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     supabase_url: str = Field(min_length=1)
     supabase_anon_key: str = Field(min_length=1)
     supabase_service_role_key: str = Field(min_length=1)
-    supabase_jwt_secret: str = Field(min_length=1)
     storage_bucket: str = Field(min_length=1)
+    cors_origins: str = "http://localhost:8081"
 
 
 @lru_cache

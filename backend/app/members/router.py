@@ -6,11 +6,12 @@ the member row. This service does not hash passwords or sign tokens.
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.members import supabase
+from app.members.deps import bearer, current_member
 from app.members.models import Member as MemberRow
 from app.members.schemas import (
     Acknowledgement,
@@ -21,14 +22,9 @@ from app.members.schemas import (
     RefreshRequest,
     ResetPassword,
 )
-from app.members.supabase import (
-    AuthSession,
-    InvalidAccessToken,
-    SupabaseAuthError,
-)
+from app.members.supabase import AuthSession, SupabaseAuthError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-_bearer = HTTPBearer()
 _RESET_ACK = "If that address is registered, a reset mail is on its way."
 _UNAUTHORIZED = {"WWW-Authenticate": "Bearer"}
 
@@ -57,42 +53,6 @@ def _member_session(auth: AuthSession, db: Session) -> MemberSession:
         refresh_token=auth.refresh_token,
         member=Member.model_validate(member),
     )
-
-
-def _member_from_bearer(
-    credentials: HTTPAuthorizationCredentials,
-    db: Session,
-) -> MemberRow:
-    """Loads the member named by a bearer access token.
-
-    Args:
-        credentials: Authorization header carrying the access token.
-        db: Open database session.
-
-    Returns:
-        The member whose id is the token subject.
-
-    Raises:
-        HTTPException: The token is invalid or names no member.
-    """
-    try:
-        member_id = supabase.member_id_from_access_token(
-            credentials.credentials,
-        )
-    except InvalidAccessToken as error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token.",
-            headers=_UNAUTHORIZED,
-        ) from error
-    member = db.get(MemberRow, member_id)
-    if member is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token.",
-            headers=_UNAUTHORIZED,
-        )
-    return member
 
 
 def _unavailable(error: httpx.HTTPError) -> HTTPException:
@@ -233,38 +193,36 @@ def refresh_session(
 
 
 @router.get("/me", response_model=Member)
-def current_member(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
-    db: Session = Depends(get_db),
+def read_current_member(
+    member: MemberRow = Depends(current_member),
 ) -> MemberRow:
     """Returns the member named by the bearer token.
 
     Args:
-        credentials: Authorization header carrying the access token.
-        db: Open database session.
+        member: The member loaded from the access token.
 
     Returns:
         The signed-in member.
     """
-    return _member_from_bearer(credentials, db)
+    return member
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
-    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    _member: MemberRow = Depends(current_member),
 ) -> None:
     """Revokes this session.
 
     Args:
         credentials: Authorization header carrying the access token.
-        db: Open database session.
+        _member: The member loaded from the access token. Checking it
+            rejects a token that names no member.
 
     Raises:
         HTTPException: The token is invalid or the Auth service is
             unavailable.
     """
-    _member_from_bearer(credentials, db)
     try:
         supabase.logout(credentials.credentials)
     except SupabaseAuthError as error:

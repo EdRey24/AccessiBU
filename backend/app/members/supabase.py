@@ -6,6 +6,7 @@ stored.
 
 import uuid
 from dataclasses import dataclass
+from functools import lru_cache
 
 import httpx
 import jwt
@@ -174,6 +175,9 @@ def reset_password(token: str, password: str) -> None:
 def member_id_from_access_token(token: str) -> uuid.UUID:
     """Reads the member id from a Supabase access token.
 
+    The token must be signed by a key published at the project's JWKS
+    endpoint. Shared-secret (HS256) tokens are rejected.
+
     Args:
         token: Bearer token from the Authorization header.
 
@@ -181,20 +185,38 @@ def member_id_from_access_token(token: str) -> uuid.UUID:
         The auth user id stored in the token subject.
 
     Raises:
-        InvalidAccessToken: The token is expired, unsigned, or has no
-            subject.
+        InvalidAccessToken: The token is expired, unsigned, signed by
+            an unknown key, or has no subject.
     """
-    settings = get_settings()
     try:
+        signing_key = _jwks_client().get_signing_key_from_jwt(token)
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            signing_key.key,
+            algorithms=["ES256", "RS256"],
             audience="authenticated",
         )
         return uuid.UUID(str(payload["sub"]))
     except (jwt.PyJWTError, ValueError, KeyError) as error:
         raise InvalidAccessToken from error
+
+
+@lru_cache
+def _jwks_client() -> jwt.PyJWKClient:
+    """Returns the cached JWKS client for this process.
+
+    Returns:
+        A client that fetches and caches the project's signing keys.
+    """
+    settings = get_settings()
+    url = (
+        f"{settings.supabase_url.rstrip('/')}"
+        "/auth/v1/.well-known/jwks.json"
+    )
+    return jwt.PyJWKClient(
+        url,
+        headers={"apikey": settings.supabase_anon_key},
+    )
 
 
 def _url(path: str) -> str:
