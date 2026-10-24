@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     buildSpatialContext,
     CDS_FLOORS,
+    CDS_LOCATION,
     floorLabel,
     floorPlanImage,
     gpsToPlanXY,
@@ -30,6 +31,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/services/api';
 import { classifyHazard } from '@/services/classifier';
 import { resolveFloor2Location } from '@/services/floor-geo';
+import { submitTextReport } from '@/services/hazards';
 import { pinSeverity, submitPhotoReport } from '@/services/reports';
 
 import { CameraCapture } from './camera-capture';
@@ -221,21 +223,52 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
       return;
     }
 
-    addHazard({
-      type: effectiveType,
-      severity: result ? result.severity : 5,
-      description: description.trim(),
-      location,
-      floor: location === 'inside' ? floor : null,
-      position: location === 'inside' ? position : null,
-      method,
-      photoUri,
-      spatialContext,
-      severityReason: result?.reason,
-      room: resolved?.room ?? null,
-      coordinate: resolved?.coordinate ?? null,
-    });
-    close();
+    // Manual (and non-Floor-2 photo) reports now persist to the backend so
+    // other devices see them. Resolve a real coordinate: a digitized Floor 2
+    // pin is exact; otherwise fall back to GPS, then the CDS building center.
+    const severity = result ? result.severity : 5;
+    const coordinate =
+      resolved?.coordinate ??
+      (coords
+        ? { latitude: coords.latitude, longitude: coords.longitude }
+        : { latitude: CDS_LOCATION.latitude, longitude: CDS_LOCATION.longitude });
+
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const stored = await submitTextReport({
+        type: effectiveType,
+        description: description.trim(),
+        severity,
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+      });
+      addHazard({
+        id: stored.hazardId,
+        createdAt: stored.createdAt,
+        type: effectiveType,
+        hazardType: stored.hazardType,
+        severity,
+        severityScore: stored.severityScore,
+        description: description.trim(),
+        location,
+        floor: location === 'inside' ? floor : null,
+        position: location === 'inside' ? position : null,
+        method,
+        photoUri,
+        spatialContext,
+        severityReason: result?.reason,
+        room: resolved?.room ?? null,
+        coordinate,
+      });
+      close();
+    } catch (error) {
+      setSubmitError(
+        error instanceof ApiError ? error.message : 'The report could not be stored.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const missingManual: string[] = [];
