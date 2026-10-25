@@ -400,6 +400,33 @@ def test_failed_classification_deletes_the_object(
     assert client.get("/hazards").json() == []
 
 
+def test_refused_photo_deletes_the_object(
+    client: TestClient,
+    objects: dict[str, tuple[bytes, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A photo that is not a hazard leaves no object and no report."""
+    from app.reports.classify import NotAHazard
+
+    def refuse(
+        image: bytes,
+        media_type: str,
+        description: str | None = None,
+    ) -> Classification:
+        raise NotAHazard("not_a_hazard")
+
+    monkeypatch.setattr("app.reports.service._classify", refuse)
+    response = client.post(
+        "/reports/photo",
+        data={**PLACE, "description": "this dude"},
+        files={"image": ("people.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "not_a_hazard"
+    assert objects == {}
+    assert client.get("/hazards").json() == []
+
+
 def test_failed_commit_deletes_the_object(
     client: TestClient,
     objects: dict[str, tuple[bytes, str]],

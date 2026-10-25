@@ -168,6 +168,30 @@ def test_classify_route_rejects_an_unclassified_photo(
     assert response.json()["detail"] == "The photo could not be classified."
 
 
+def test_classify_route_refuses_a_photo_that_is_not_a_hazard(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refusal is a distinct 422 and stores nothing."""
+    from app.reports.classify import NotAHazard
+
+    def refuse(
+        image: bytes,
+        media_type: str,
+        description: str | None = None,
+    ) -> Classification:
+        raise NotAHazard("not_a_hazard")
+
+    monkeypatch.setattr("app.reports.router.classify", refuse)
+    response = client.post(
+        "/classify",
+        files={"image": ("people.jpg", JPEG, "image/jpeg")},
+        data={"description": "this dude"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "not_a_hazard"
+
+
 def _context(distance: float) -> PreviewContext:
     """Builds a preview context with one nearby feature.
 

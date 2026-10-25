@@ -17,14 +17,19 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.members.deps import current_member
 from app.members.models import Member
-from app.reports.classify import ClassificationError, classify
+from app.reports.classify import (
+    NOT_A_HAZARD,
+    ClassificationError,
+    NotAHazard,
+    classify,
+)
+from app.reports.models import HazardType
 from app.reports.preview import (
     PreviewClassification,
     PreviewContextError,
     load_preview_context,
     preview_classification,
 )
-from app.reports.models import HazardType
 from app.reports.schemas import (
     Classification,
     PhotoReport,
@@ -193,6 +198,8 @@ async def classify_photo(
         raise _rejected(error) from error
     except PreviewContextError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    except NotAHazard as error:
+        raise HTTPException(status_code=422, detail=NOT_A_HAZARD) from error
     except ClassificationError as error:
         logger.warning("Preview classification failed: %s", error)
         raise HTTPException(

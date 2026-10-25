@@ -17,15 +17,15 @@ A Member's stated need for a barrier-free path.
 _Avoid_: accessibility mode
 
 **Hazard**:
-A real-world condition at a place, described by one or more Reports. It stays open until a Member marks it resolved, and if that condition returns it is a new Hazard.
+A physical condition at a place that interferes with passage, including a person or object blocking the way, and not merely a sign, screen, or written claim about one, described by one or more Reports. It stays open until a Member marks it resolved, and if that condition returns it is a new Hazard.
 _Avoid_: Issue, problem, pin
 
 **Report**:
-One submission from one Member about a Hazard, either a photo or text, and it cannot be withdrawn. A photo Report has a picture, a hazard type, a numeric category, and a summary, and the picture stays when the Hazard is resolved. A text Report has a hazard type, a numeric category, and a description.
+One submission from one Member about a Hazard, a photo that shows it or a text Report, and it cannot be withdrawn. A photo Report has a picture, a hazard type, a numeric category, and a summary, and the picture stays when the Hazard is resolved. A text Report has a hazard type, a numeric category, and a description.
 _Avoid_: Pin, ticket
 
 **Hazard type**:
-The kind of condition a Report describes: spill, blockage, elevator, entrance, walking surface, or other.
+The kind of condition a Report describes: spill, blockage, elevator, entrance, walking surface, or other. Other is a Hazard whose condition fits none of those kinds.
 _Avoid_: category, label
 
 **Category**:
@@ -33,7 +33,7 @@ The numeric code on a Report, alongside its hazard type.
 _Avoid_: label, type
 
 **Severity**:
-A score from 0 to 100 on a Hazard for how much the condition interferes with passage. Higher means more blocked. A photo’s score comes from classification, and a text submission supplies the score directly.
+A score on a Hazard for how much the condition interferes with passage, higher meaning more blocked. Classification of a photo is from 1 to 100, and on a text Report the Member chooses the score, from 0 to 100.
 _Avoid_: low, medium, high, label
 
 **Summary**:
@@ -43,6 +43,10 @@ _Avoid_: caption
 **Description**:
 The text a Member writes in a text Report.
 _Avoid_: comment, note
+
+**Note**:
+The text a Member writes alongside a photo.
+_Avoid_: description, caption
 
 **Facilities**:
 The campus organization responsible for repairing Hazards.

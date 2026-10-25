@@ -12,6 +12,9 @@
  *   - field "description": what the member wrote
  *   - field "context":     JSON string of SpatialContext (see constants/hazards.ts)
  *
+ * A 422 with detail "not_a_hazard" means the photo shows no hazard.
+ * The report screen turns that code into its own sentence.
+ *
  * Expected JSON response:
  *   {
  *     "type": "Spill",
