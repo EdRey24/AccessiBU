@@ -120,7 +120,7 @@ export async function loadHazardPhoto(hazardId: string): Promise<string | null> 
   return readDataUrl(await response.blob());
 }
 
-function readDataUrl(blob: Blob): Promise<string> {
+export function readDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
