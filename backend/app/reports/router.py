@@ -23,6 +23,7 @@ from app.reports.preview import (
     load_preview_context,
     preview_classification,
 )
+from app.reports.models import HazardType
 from app.reports.schemas import (
     PhotoReport,
     ReportPlace,
@@ -76,6 +77,9 @@ async def create_photo_report(
     floor: Annotated[int | None, Form()] = None,
     position_x: Annotated[float | None, Form()] = None,
     position_y: Annotated[float | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
+    hazard_type: Annotated[str | None, Form()] = None,
+    severity_score: Annotated[int | None, Form()] = None,
     member: Member = Depends(current_member),
     db: Session = Depends(get_db),
 ) -> PhotoReport:
@@ -89,6 +93,12 @@ async def create_photo_report(
         floor: Floor the pin sits on. Omit for an outside hazard.
         position_x: Normalized pin x on the floor plan.
         position_y: Normalized pin y on the floor plan.
+        description: What the member wrote. The vision call uses it
+            with the photo.
+        hazard_type: Type the member confirmed after the preview.
+            Omit to keep the vision type.
+        severity_score: Passage interference the member confirmed,
+            from 0 through 100. Omit to keep the vision score.
         member: The signed-in member.
         db: Open database session.
 
@@ -107,9 +117,19 @@ async def create_photo_report(
         position_x,
         position_y,
     )
+    chosen_type = _member_type(hazard_type)
+    chosen_score = _member_score(severity_score)
     raw = await image.read(MAX_IMAGE_BYTES + 1)
     try:
-        return store_photo(db, member, raw, place)
+        return store_photo(
+            db,
+            member,
+            raw,
+            place,
+            _note(description),
+            chosen_type,
+            chosen_score,
+        )
     except RejectedReport as error:
         raise _rejected(error) from error
     except StorageError as error:
@@ -123,6 +143,7 @@ async def create_photo_report(
 async def classify_photo(
     image: Annotated[UploadFile, File()],
     context: Annotated[str | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
     member: Member = Depends(current_member),
 ) -> PreviewClassification:
     """Classifies a photo without storing a report.
@@ -130,6 +151,8 @@ async def classify_photo(
     Args:
         image: The captured photo.
         context: JSON spatial context, when the pin is on a floor plan.
+        description: What the member wrote. The type and severity come
+            from this text and the photo together.
         member: The signed-in member.
 
     Returns:
@@ -143,7 +166,7 @@ async def classify_photo(
     try:
         inspected = inspect_image(raw)
         parsed = load_preview_context(context)
-        classification = classify(raw, inspected.media_type)
+        classification = classify(raw, inspected.media_type, _note(description))
     except RejectedReport as error:
         raise _rejected(error) from error
     except PreviewContextError as error:
@@ -154,6 +177,76 @@ async def classify_photo(
             detail="The photo could not be classified.",
         ) from error
     return preview_classification(classification, parsed)
+
+
+def _member_type(value: str | None) -> HazardType | None:
+    """Reads a confirmed hazard type, or leaves the vision type.
+
+    Args:
+        value: The form field, or nothing.
+
+    Returns:
+        The stored hazard type, or None when the field was omitted.
+
+    Raises:
+        HTTPException: The value is not a known hazard type.
+    """
+    if value is None or value.strip() == "":
+        return None
+    try:
+        return HazardType(value.strip())
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail="Hazard type is not recognized.",
+        ) from error
+
+
+def _member_score(value: int | None) -> int | None:
+    """Reads a confirmed severity, or leaves the vision score.
+
+    Args:
+        value: Passage interference from 0 through 100, or nothing.
+
+    Returns:
+        The score, or None when the field was omitted.
+
+    Raises:
+        HTTPException: The score is outside 0 through 100.
+    """
+    if value is None:
+        return None
+    if value < 0 or value > 100:
+        raise HTTPException(
+            status_code=422,
+            detail="Severity is from 0 through 100.",
+        )
+    return value
+
+
+def _note(description: str | None) -> str | None:
+    """Strips a member description, or drops a blank one.
+
+    Args:
+        description: The form field, or nothing.
+
+    Returns:
+        The stripped description, or None when it is blank.
+
+    Raises:
+        HTTPException: The description is longer than 1000 characters.
+    """
+    if description is None:
+        return None
+    note = description.strip()
+    if note == "":
+        return None
+    if len(note) > 1000:
+        raise HTTPException(
+            status_code=422,
+            detail="The description is at most 1000 characters.",
+        )
+    return note
 
 
 def _place(

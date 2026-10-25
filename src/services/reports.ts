@@ -2,12 +2,13 @@
  * Stores a photo report.
  *
  * POST /reports/photo takes the image and the place. Classification fills
- * the hazard type, category, summary, and severity. The severity is read
- * back from the hazard, because the photo report does not carry it.
+ * the hazard type, category, summary, and severity. A confirmed type and
+ * severity replace the vision values. The severity is read back from the
+ * hazard, because the photo report does not carry it.
  */
 
 import type { StoredHazardType } from '@/constants/hazards';
-import { ApiError, apiFetch, apiUrl } from '@/services/api';
+import { ApiError, apiFetch, apiUrl, errorDetail } from '@/services/api';
 import { appendPhoto } from '@/services/photo-form';
 
 const STORED_HAZARD_TYPES: readonly StoredHazardType[] = [
@@ -45,6 +46,11 @@ export async function submitPhotoReport(input: {
   longitude: number;
   floor?: number | null;
   position?: { x: number; y: number } | null;
+  description?: string | null;
+  /** Type the member confirmed after the preview. */
+  hazardType?: StoredHazardType | null;
+  /** Passage interference the member confirmed, from 0 through 100. */
+  severityScore?: number | null;
 }): Promise<StoredPhotoReport> {
   if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
 
@@ -56,6 +62,11 @@ export async function submitPhotoReport(input: {
   if (input.position) {
     form.append('position_x', String(input.position.x));
     form.append('position_y', String(input.position.y));
+  }
+  if (input.description?.trim()) form.append('description', input.description.trim());
+  if (input.hazardType) form.append('hazard_type', input.hazardType);
+  if (input.severityScore != null) {
+    form.append('severity_score', String(input.severityScore));
   }
 
   const response = await apiFetch('/reports/photo', { method: 'POST', body: form });
@@ -83,13 +94,18 @@ export function pinSeverity(score: number): number {
 }
 
 async function readSeverity(hazardId: string): Promise<number | null> {
-  const response = await apiFetch(`/hazards/${hazardId}`);
-  if (!response.ok) return null;
-  const body: unknown = await response.json();
-  if (!body || typeof body !== 'object' || !('severity_score' in body)) return null;
-  const score = (body as { severity_score: unknown }).severity_score;
-  if (typeof score !== 'number' || score < 0 || score > 100) return null;
-  return score;
+  try {
+    const response = await apiFetch(`/hazards/${hazardId}`);
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    if (!body || typeof body !== 'object' || !('severity_score' in body)) return null;
+    const score = (body as { severity_score: unknown }).severity_score;
+    if (typeof score !== 'number' || score < 0 || score > 100) return null;
+    return score;
+  } catch {
+    // The photo report is already stored. A missing score should not fail it.
+    return null;
+  }
 }
 
 function parsePhotoReport(body: unknown): PhotoReportBody | null {
@@ -116,21 +132,3 @@ function parsePhotoReport(body: unknown): PhotoReportBody | null {
   };
 }
 
-async function errorDetail(response: Response): Promise<string> {
-  try {
-    const payload: unknown = await response.json();
-    if (payload && typeof payload === 'object' && 'detail' in payload) {
-      const detail = (payload as { detail: unknown }).detail;
-      if (typeof detail === 'string' && detail.length > 0) return detail;
-      if (Array.isArray(detail)) {
-        const first = detail.find(
-          (item) => item && typeof item === 'object' && 'msg' in item,
-        ) as { msg?: unknown } | undefined;
-        if (first && typeof first.msg === 'string' && first.msg.length > 0) return first.msg;
-      }
-    }
-  } catch {
-    // The body was empty or not JSON.
-  }
-  return `Request failed (${response.status}).`;
-}

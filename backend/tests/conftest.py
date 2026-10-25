@@ -31,6 +31,7 @@ import app.reports.models  # noqa: F401
 from app.base import Base
 from app.db import get_db
 from app.main import app
+from app.reports.storage import StorageError
 from app.members.deps import current_member
 from app.members.models import Member, MemberRole
 
@@ -156,8 +157,15 @@ def client(
     def delete_object(path: str) -> None:
         objects.pop(path, None)
 
+    def get_object(path: str) -> tuple[bytes, str]:
+        try:
+            return objects[path]
+        except KeyError as error:
+            raise StorageError("missing") from error
+
     monkeypatch.setattr("app.reports.service.put_object", put_object)
     monkeypatch.setattr("app.reports.service.delete_object", delete_object)
+    monkeypatch.setattr("app.reports.service.get_object", get_object)
 
     def override_db() -> Iterator[Session]:
         session = SessionLocal()

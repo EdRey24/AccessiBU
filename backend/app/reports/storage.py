@@ -45,6 +45,56 @@ def put_object(path: str, body: bytes, content_type: str) -> None:
     _send("POST", path, content_type, body)
 
 
+def get_object(path: str) -> tuple[bytes, str]:
+    """Downloads a photo object.
+
+    Args:
+        path: Object key inside the configured bucket.
+
+    Returns:
+        The raw bytes and their media type.
+
+    Raises:
+        StorageError: The object is missing, the download was rejected,
+            or the service was unreachable.
+    """
+    settings = get_settings()
+    try:
+        response = httpx.request(
+            "GET",
+            _object_url(settings, path),
+            headers=_headers(settings, "application/octet-stream"),
+            timeout=_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as error:
+        raise StorageError("unreachable") from error
+    if response.status_code == 404:
+        raise StorageError("missing")
+    if response.status_code >= 400:
+        raise StorageError("rejected")
+    media = response.headers.get("content-type", "")
+    media = media.split(";", 1)[0].strip().lower()
+    if media == "" or media == "application/octet-stream":
+        media = _media_type(path)
+    return response.content, media
+
+
+def _media_type(path: str) -> str:
+    """Guesses a media type from an object key.
+
+    Args:
+        path: Object key.
+
+    Returns:
+        image/png, image/heic, or image/jpeg.
+    """
+    if path.endswith(".png"):
+        return "image/png"
+    if path.endswith(".heic"):
+        return "image/heic"
+    return "image/jpeg"
+
+
 def delete_object(path: str) -> None:
     """Deletes a photo object.
 

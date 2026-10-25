@@ -14,7 +14,7 @@ import { ThemedText } from '@/components/themed-text';
 import { BU, Spacing } from '@/constants/theme';
 import { useSession } from '@/hooks/use-session';
 import { useTheme } from '@/hooks/use-theme';
-import { ApiError } from '@/services/api';
+import { failureMessage } from '@/services/api';
 import { emailError, normalizeEmail, passwordError } from '@/services/credentials';
 
 type Mode = 'sign-in' | 'create' | 'forgot';
@@ -62,7 +62,7 @@ export default function SignInScreen() {
         await signIn(address, password);
       }
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.');
+      setError(failureMessage(caught, 'Something went wrong. Try again.'));
     } finally {
       setBusy(false);
     }

@@ -72,9 +72,14 @@ def test_classify_route_returns_the_preview_contract(
 ) -> None:
     """POST /classify returns the camelCase preview body."""
 
-    def fake(image: bytes, media_type: str) -> Classification:
+    def fake(
+        image: bytes,
+        media_type: str,
+        description: str | None = None,
+    ) -> Classification:
         assert image.startswith(b"\xff\xd8\xff")
         assert media_type == "image/jpeg"
+        assert description is None
         return _classification(35)
 
     monkeypatch.setattr("app.reports.router.classify", fake)
@@ -94,6 +99,30 @@ def test_classify_route_returns_the_preview_contract(
     }
 
 
+def test_classify_route_uses_the_description(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The member's description is sent with the photo."""
+
+    def fake(
+        image: bytes,
+        media_type: str,
+        description: str | None = None,
+    ) -> Classification:
+        assert description == "A cart is blocking the door."
+        return _classification(35)
+
+    monkeypatch.setattr("app.reports.router.classify", fake)
+    response = client.post(
+        "/classify",
+        files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
+        data={"description": "  A cart is blocking the door.  "},
+    )
+    assert response.status_code == 200
+    assert response.json()["type"] == "Blocked path"
+
+
 def test_classify_route_rejects_a_bad_context(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -101,7 +130,9 @@ def test_classify_route_rejects_a_bad_context(
     """A context that is not JSON never reaches the vision call."""
     monkeypatch.setattr(
         "app.reports.router.classify",
-        lambda image, media_type: pytest.fail("vision was called"),
+        lambda image, media_type, description=None: pytest.fail(
+            "vision was called"
+        ),
     )
     response = client.post(
         "/classify",
@@ -121,7 +152,11 @@ def test_classify_route_rejects_an_unclassified_photo(
     """A failed vision call is a 422 and stores nothing."""
     from app.reports.classify import ClassificationError
 
-    def fail(image: bytes, media_type: str) -> Classification:
+    def fail(
+        image: bytes,
+        media_type: str,
+        description: str | None = None,
+    ) -> Classification:
         raise ClassificationError("The vision call failed.")
 
     monkeypatch.setattr("app.reports.router.classify", fail)

@@ -155,45 +155,9 @@ export function floorPlanSize(floor: number): { width: number; height: number } 
 /** Back-compat default (tower). Prefer floorPlanSize(floor). */
 export const FLOOR_PLAN_SIZE = TOWER_SIZE;
 
-/**
- * Spatial reasoning: given a pinned hazard, compute how close it is to the
- * stair/elevator core so the backend classifier can raise or lower severity.
- * Feature positions live in ./floor-features (digitized via the dev tool).
- */
-
 /** Euclidean distance between two normalized points (0-1 space). */
 function normalizedDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-export type ProximityContext = {
-  nearest: FloorFeature | null;
-  /** Normalized distance (0-1) to the nearest feature. */
-  distance: number;
-  /** True when the hazard sits very close to a stair/elevator. */
-  nearCriticalEgress: boolean;
-};
-
-/** Finds the nearest accessibility feature to a pinned hazard position. */
-export function proximityToFeatures(
-  floor: number,
-  pos: { x: number; y: number }
-): ProximityContext {
-  const feats = floorFeatures(floor);
-  let nearest: FloorFeature | null = null;
-  let distance = Infinity;
-  for (const f of feats) {
-    const d = normalizedDistance(pos, f);
-    if (d < distance) {
-      distance = d;
-      nearest = f;
-    }
-  }
-  return {
-    nearest,
-    distance: distance === Infinity ? 1 : distance,
-    nearCriticalEgress: distance <= 0.12,
-  };
 }
 
 /**

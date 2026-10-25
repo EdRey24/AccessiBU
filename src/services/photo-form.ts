@@ -12,7 +12,12 @@ import { ApiError } from '@/services/api';
 
 export async function appendPhoto(form: FormData, uri: string): Promise<void> {
   if (Platform.OS === 'web') {
-    const response = await fetch(uri);
+    let response: Response;
+    try {
+      response = await fetch(uri);
+    } catch {
+      throw new ApiError(0, 'The photo could not be read.');
+    }
     if (!response.ok) throw new ApiError(0, 'The photo could not be read.');
     const blob = await response.blob();
     const type = blob.type || 'image/jpeg';

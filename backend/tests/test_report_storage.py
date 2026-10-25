@@ -51,6 +51,7 @@ def test_text_report_opens_a_hazard(client: TestClient) -> None:
     assert hazard.status_code == 200
     assert hazard.json()["severity_score"] == 40
     assert hazard.json()["status"] == "open"
+    assert hazard.json()["summary"] == "Wet floor by the door"
 
     reports = client.get(f"/hazards/{hazard_id}/reports")
     assert reports.status_code == 200
@@ -167,7 +168,7 @@ def test_photo_report_stores_the_classification(
     """A photo is stored only with the vision call's fields."""
     monkeypatch.setattr(
         "app.reports.service._classify",
-        lambda image, media_type: _classification(),
+        lambda image, media_type, description=None: _classification(),
     )
     response = client.post(
         "/reports/photo",
@@ -184,6 +185,107 @@ def test_photo_report_stores_the_classification(
     assert objects[body["image_path"]][1] == "image/jpeg"
     hazard = client.get(f"/hazards/{body['hazard_id']}")
     assert hazard.json()["severity_score"] == 80
+    assert hazard.json()["summary"] == "A cart blocks the east entrance."
+    listed = client.get("/hazards")
+    assert listed.json()[0]["summary"] == "A cart blocks the east entrance."
+
+
+def test_hazard_photo_returns_the_stored_image(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The hazard photo route returns the uploaded bytes."""
+    monkeypatch.setattr(
+        "app.reports.service._classify",
+        lambda image, media_type, description=None: _classification(),
+    )
+    stored = client.post(
+        "/reports/photo",
+        data=PLACE,
+        files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
+    )
+    assert stored.status_code == 201
+    photo = client.get(f"/hazards/{stored.json()['hazard_id']}/photo")
+    assert photo.status_code == 200
+    assert photo.headers["content-type"].startswith("image/jpeg")
+    assert photo.content == JPEG
+
+
+def test_hazard_without_a_photo_has_no_image(client: TestClient) -> None:
+    """A text hazard has no photo to show."""
+    stored = client.post(
+        "/reports/text",
+        json={
+            **PLACE,
+            "hazard_type": "spill",
+            "category": 2,
+            "description": "Wet floor by the door",
+            "severity_score": 40,
+        },
+    )
+    assert stored.status_code == 201
+    photo = client.get(f"/hazards/{stored.json()['hazard_id']}/photo")
+    assert photo.status_code == 404
+
+
+def test_photo_report_classifies_with_the_description(
+    client: TestClient,
+    objects: dict[str, tuple[bytes, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stored classification is asked to use the written note."""
+    seen: dict[str, str | None] = {}
+
+    def fake(
+        image: bytes,
+        media_type: str,
+        description: str | None = None,
+    ) -> Classification:
+        seen["description"] = description
+        return _classification()
+
+    monkeypatch.setattr("app.reports.service._classify", fake)
+    response = client.post(
+        "/reports/photo",
+        data={**PLACE, "description": "  Cart in the doorway  "},
+        files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 201
+    assert seen["description"] == "Cart in the doorway"
+    assert objects != {}
+
+
+def test_photo_report_keeps_the_member_type_and_severity(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A confirmed type and severity replace the vision values."""
+    monkeypatch.setattr(
+        "app.reports.service._classify",
+        lambda image, media_type, description=None: _classification(),
+    )
+    response = client.post(
+        "/reports/photo",
+        data={**PLACE, "hazard_type": "spill", "severity_score": "40"},
+        files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["hazard_type"] == "spill"
+    assert body["category"] == 14
+    assert body["summary"] == "A cart blocks the east entrance."
+    hazard = client.get(f"/hazards/{body['hazard_id']}")
+    assert hazard.json()["severity_score"] == 40
+
+
+def test_photo_report_rejects_an_unknown_type(client: TestClient) -> None:
+    """A type outside the stored set is rejected before upload."""
+    response = client.post(
+        "/reports/photo",
+        data={**PLACE, "hazard_type": "puddle"},
+        files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 422
 
 
 def test_bad_photo_is_rejected(
@@ -223,7 +325,11 @@ def test_failed_classification_deletes_the_object(
 ) -> None:
     """A failed vision call leaves no object and no report."""
 
-    def fail(image: bytes, media_type: str) -> Classification:
+    def fail(
+        image: bytes,
+        media_type: str,
+        description: str | None = None,
+    ) -> Classification:
         raise RuntimeError("vision")
 
     monkeypatch.setattr("app.reports.service._classify", fail)
@@ -250,7 +356,7 @@ def test_failed_commit_deletes_the_object(
     """A database failure deletes the uploaded photo."""
     monkeypatch.setattr(
         "app.reports.service._classify",
-        lambda image, media_type: _classification(),
+        lambda image, media_type, description=None: _classification(),
     )
     state["fail_commit"] = True
     with pytest.raises(RuntimeError, match="disk"):

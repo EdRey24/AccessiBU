@@ -10,6 +10,7 @@ import {
 
 import type { Hazard } from '@/constants/hazards';
 import { useSession } from '@/hooks/use-session';
+import { failureMessage } from '@/services/api';
 import { listHazards } from '@/services/hazards';
 
 type NewHazard = Omit<Hazard, 'id' | 'createdAt'> & {
@@ -25,6 +26,8 @@ type HazardStore = {
   refresh: () => Promise<void>;
   /** True while the first (or a manual) load is in flight. */
   loading: boolean;
+  /** Set when the last load failed. Null after a successful load. */
+  error: string | null;
 };
 
 const HazardContext = createContext<HazardStore | null>(null);
@@ -32,10 +35,25 @@ const HazardContext = createContext<HazardStore | null>(null);
 /** Merges fetched hazards with local ones, keeping one entry per id. */
 function mergeById(local: Hazard[], fetched: Hazard[]): Hazard[] {
   const byId = new Map<string, Hazard>();
-  // Local entries win: a hazard this device just created carries richer
-  // detail (floor, pin, room) than the coordinate-only server row.
+  // Local entries keep the pin, room, and photo. The server sentence
+  // replaces the placeholder used before a summary was loaded.
   for (const h of fetched) byId.set(h.id, h);
-  for (const h of local) byId.set(h.id, h);
+  for (const h of local) {
+    const server = byId.get(h.id);
+    if (!server) {
+      byId.set(h.id, h);
+      continue;
+    }
+    const keepLocalText = h.description !== '' && h.description !== 'Reported hazard';
+    byId.set(h.id, {
+      ...server,
+      ...h,
+      description: keepLocalText ? h.description : server.description,
+      photoUri: h.photoUri ?? server.photoUri,
+      hazardType: h.hazardType ?? server.hazardType,
+      room: h.room ?? server.room,
+    });
+  }
   return Array.from(byId.values()).sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -43,14 +61,16 @@ export function HazardProvider({ children }: { children: ReactNode }) {
   const { member } = useSession();
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const fetched = await listHazards();
       setHazards((prev) => mergeById(prev, fetched));
-    } catch {
-      // Keep whatever is already on screen if the sync fails.
+      setError(null);
+    } catch (caught) {
+      setError(failureMessage(caught, 'Hazards could not be loaded.'));
     } finally {
       setLoading(false);
     }
@@ -75,6 +95,7 @@ export function HazardProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       if (!member) {
         setHazards([]);
+        setError(null);
         return;
       }
       await load();
@@ -105,8 +126,8 @@ export function HazardProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ hazards, addHazard, removeHazard, refresh, loading }),
-    [hazards, addHazard, removeHazard, refresh, loading]
+    () => ({ hazards, addHazard, removeHazard, refresh, loading, error }),
+    [hazards, addHazard, removeHazard, refresh, loading, error]
   );
 
   return <HazardContext.Provider value={value}>{children}</HazardContext.Provider>;
