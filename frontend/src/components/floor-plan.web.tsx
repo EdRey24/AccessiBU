@@ -24,6 +24,8 @@ type FloorPlanProps = {
   /** "You are here" dot from GPS, normalized (0-1). Null = unknown. */
   userDot?: Pos | null;
   caption?: string;
+  /** Pin to ring so it stands out from the others. */
+  selectedId?: string | null;
 };
 
 const PIN = 26;
@@ -44,6 +46,7 @@ export function FloorPlan({
   showFeatures,
   userDot = null,
   caption,
+  selectedId = null,
 }: FloorPlanProps) {
   const theme = useTheme();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -152,7 +155,13 @@ export function FloorPlan({
               <View
                 key={hz.id}
                 onClick={() => onPinPress?.(hz)}
-                style={[styles.pin, px(hz.position!), { cursor: 'pointer' } as any]}>
+                style={[
+                  styles.pin,
+                  px(hz.position!),
+                  hz.id === selectedId && styles.pinSelected,
+                  { cursor: 'pointer' } as any,
+                ]}>
+                {hz.id === selectedId && <View pointerEvents="none" style={styles.selectedRing} />}
                 <View style={[styles.pinDot, { backgroundColor: severityColor(hz.severity) }]}>
                   <View style={styles.pinInner} />
                 </View>
@@ -220,6 +229,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   pinInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
+  pinSelected: { zIndex: 10 },
+  selectedRing: {
+    position: 'absolute',
+    width: PIN + 16,
+    height: PIN + 16,
+    borderRadius: (PIN + 16) / 2,
+    borderWidth: 3,
+    borderColor: '#111',
+  },
   draftHalo: {
     position: 'absolute',
     width: PIN * 2,

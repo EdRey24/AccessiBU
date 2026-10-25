@@ -1,13 +1,15 @@
 """HTTP entrypoint for the AccessiBU API.
 
 Creates the FastAPI application, exposes a health check, and mounts
-member authentication, hazard reads, report submission, and photo
-preview classification. Facilities email is not sent here.
+member authentication, hazard reads, report submission, photo
+preview classification, and admin-only Facilities routes. Facilities
+email is not sent here.
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.admin.router import router as admin_router
 from app.config import get_settings
 from app.hazards.router import router as hazards_router
 from app.members.router import router as members_router
@@ -38,6 +40,7 @@ app.add_middleware(
 )
 app.include_router(members_router)
 app.include_router(hazards_router)
+app.include_router(admin_router)
 app.include_router(reports_router)
 app.include_router(classify_router)
 

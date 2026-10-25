@@ -10,7 +10,7 @@ import json
 import httpx
 from pydantic import ValidationError
 
-from app.config import get_settings
+from app.config import get_vision_settings
 from app.reports.models import HazardType
 from app.reports.schemas import Classification
 
@@ -216,7 +216,7 @@ def _setting(name: str) -> str:
     Raises:
         ClassificationError: The variable is missing or blank.
     """
-    value = str(getattr(get_settings(), name.lower(), "")).strip()
+    value = str(getattr(get_vision_settings(), name.lower(), "")).strip()
     if value == "":
         raise ClassificationError("The vision call is not configured.")
     return value
