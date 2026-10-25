@@ -6,6 +6,7 @@ summary, and severity. POST /classify previews that call without
 storing a report.
 """
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -39,6 +40,7 @@ from app.reports.service import (
 )
 from app.reports.storage import StorageError
 
+logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/reports", tags=["reports"])
 classify_router = APIRouter(tags=["classify"])
 
@@ -172,6 +174,7 @@ async def classify_photo(
     except PreviewContextError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except ClassificationError as error:
+        logger.warning("Preview classification failed: %s", error)
         raise HTTPException(
             status_code=422,
             detail="The photo could not be classified.",

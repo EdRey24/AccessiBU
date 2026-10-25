@@ -2,8 +2,9 @@
 
 Required names are DATABASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY,
 SUPABASE_SERVICE_ROLE_KEY, and STORAGE_BUCKET. CORS_ORIGINS is
-optional. The service role key uploads photo bytes. The vision call
-reads its own environment variables and does not use these settings.
+optional. The service role key uploads photo bytes. VISION_API_URL,
+VISION_API_KEY, and VISION_MODEL configure the vision call. They are
+optional here, and the call fails with "not configured" if any is blank.
 """
 
 from functools import lru_cache
@@ -25,6 +26,9 @@ class Settings(BaseSettings):
         storage_bucket: Object-storage bucket for photo reports.
         cors_origins: Comma-separated browser origins allowed to call
             the API.
+        vision_api_url: Chat-completions endpoint for the vision call.
+        vision_api_key: Bearer key for that endpoint.
+        vision_model: Model name sent with each vision request.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -35,6 +39,9 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = Field(min_length=1)
     storage_bucket: str = Field(min_length=1)
     cors_origins: str = "http://localhost:8081"
+    vision_api_url: str = ""
+    vision_api_key: str = ""
+    vision_model: str = ""
 
 
 @lru_cache
