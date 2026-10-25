@@ -16,6 +16,12 @@ os.environ["SUPABASE_ANON_KEY"] = "anon"
 os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "service"
 os.environ["STORAGE_BUCKET"] = "hazard-images"
 
+from app.config import VisionSettings
+
+# Tests control the vision settings through os.environ. Never read the
+# developer's real .env, which holds a live API key.
+VisionSettings.model_config["env_file"] = None
+
 import uuid
 from collections.abc import Iterator
 

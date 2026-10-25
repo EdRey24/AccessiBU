@@ -30,6 +30,8 @@ function AuthStack() {
   const { ready, member } = useSession();
   const theme = useTheme();
   const signedIn = ready && member !== null;
+  // Hides the screen for everyone else. The backend enforces the role too.
+  const isAdmin = signedIn && member.role === 'admin';
 
   return (
     <>
@@ -37,6 +39,9 @@ function AuthStack() {
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="index" />
           <Stack.Screen name="dev/features" />
+        </Stack.Protected>
+        <Stack.Protected guard={isAdmin}>
+          <Stack.Screen name="facilities" />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="sign-in" />

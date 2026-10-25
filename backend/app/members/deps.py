@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.members import supabase
-from app.members.models import Member
+from app.members.models import Member, MemberRole
 from app.members.supabase import InvalidAccessToken
 
 bearer = HTTPBearer()
@@ -45,5 +45,25 @@ def current_member(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token.",
             headers=_UNAUTHORIZED,
+        )
+    return member
+
+
+def current_admin(member: Member = Depends(current_member)) -> Member:
+    """Loads the signed-in member and requires the admin role.
+
+    Args:
+        member: The member named by the bearer access token.
+
+    Returns:
+        The same member, once confirmed as an admin.
+
+    Raises:
+        HTTPException: The member is not an admin.
+    """
+    if member.role is not MemberRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Facilities access is required.",
         )
     return member

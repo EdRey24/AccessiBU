@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +21,8 @@ type Screen = { kind: 'map' } | { kind: 'floor'; floor: number };
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const { signOut } = useSession();
+  const router = useRouter();
+  const { member, signOut } = useSession();
   const { hazards, refresh, loading, error } = useHazards();
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [reportOpen, setReportOpen] = useState(false);
@@ -45,6 +47,17 @@ export default function HomeScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             {hazards.length} active
           </ThemedText>
+          {member?.role === 'admin' ? (
+            <Pressable
+              style={[styles.alertsBtn, { borderColor: BU.red }]}
+              accessibilityRole="button"
+              accessibilityLabel="Open the Facilities dashboard"
+              onPress={() => router.push('/facilities')}>
+              <ThemedText type="small" style={{ color: BU.red }}>
+                Facilities
+              </ThemedText>
+            </Pressable>
+          ) : null}
           <Pressable
             style={[styles.alertsBtn, { borderColor: theme.border }]}
             accessibilityRole="button"

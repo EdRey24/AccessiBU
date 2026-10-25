@@ -1,5 +1,9 @@
 """The hazards table.
 
+Facilities resolve a hazard or delete it. A resolved hazard stays
+resolved. A delete only stamps deleted_at, so the hazard, its reports,
+and its photos can be recovered.
+
 Severity is stored only on a hazard. A photo score will be copied from
 classification output, and a text submission will supply its score
 directly. Report rows do not keep a copy.
@@ -9,7 +13,14 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Float, Integer, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,6 +45,11 @@ class Hazard(Base):
         created_at: When the hazard was stored.
         severity_score: How much the condition interferes with passage,
             from 0 through 100. Higher means more blocked.
+        resolved_at: When Facilities marked the hazard resolved. Null
+            while it is open.
+        resolved_by: The admin who resolved it. Null while it is open.
+        deleted_at: When Facilities removed the hazard. A deleted
+            hazard is hidden from every route but the row is kept.
     """
 
     __tablename__ = "hazards"
@@ -87,3 +103,16 @@ class Hazard(Base):
         server_default=func.now(),
     )
     severity_score: Mapped[int] = mapped_column(Integer)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("members.id", name="fk_hazards_resolved_by"),
+        nullable=True,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

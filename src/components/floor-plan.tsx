@@ -28,6 +28,8 @@ type FloorPlanProps = {
   /** "You are here" dot from GPS, normalized (0-1). Null = unknown. */
   userDot?: Pos | null;
   caption?: string;
+  /** Pin to ring so it stands out from the others. */
+  selectedId?: string | null;
 };
 
 const PIN = 26;
@@ -47,6 +49,7 @@ export function FloorPlan({
   showFeatures,
   userDot = null,
   caption,
+  selectedId = null,
 }: FloorPlanProps) {
   const theme = useTheme();
   const [layout, setLayout] = useState<LayoutRectangle | null>(null);
@@ -128,7 +131,8 @@ export function FloorPlan({
                 accessibilityRole="button"
                 accessibilityLabel={`${hz.type}, severity ${hz.severity}`}
                 onPress={() => onPinPress?.(hz)}
-                style={[styles.pin, px(hz.position!)]}>
+                style={[styles.pin, px(hz.position!), hz.id === selectedId && styles.pinSelected]}>
+                {hz.id === selectedId && <View pointerEvents="none" style={styles.selectedRing} />}
                 <View style={[styles.pinDot, { backgroundColor: severityColor(hz.severity) }]}>
                   <View style={styles.pinInner} />
                 </View>
@@ -196,6 +200,15 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   pinInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
+  pinSelected: { zIndex: 10 },
+  selectedRing: {
+    position: 'absolute',
+    width: PIN + 16,
+    height: PIN + 16,
+    borderRadius: (PIN + 16) / 2,
+    borderWidth: 3,
+    borderColor: '#111',
+  },
   draftHalo: {
     position: 'absolute',
     width: PIN * 2,

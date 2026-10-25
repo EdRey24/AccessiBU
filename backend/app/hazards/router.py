@@ -43,7 +43,8 @@ def _with_summaries(db: Session, rows: list[HazardRow]) -> list[Hazard]:
     bodies: list[Hazard] = []
     for row in rows:
         body = Hazard.model_validate(row)
-        bodies.append(body.model_copy(update={"summary": summaries.get(row.id)}))
+        update = {"summary": summaries.get(row.id)}
+        bodies.append(body.model_copy(update=update))
     return bodies
 
 
@@ -63,7 +64,10 @@ def list_hazards(
     """
     statement = (
         select(HazardRow)
-        .where(HazardRow.status == HazardStatus.OPEN)
+        .where(
+            HazardRow.status == HazardStatus.OPEN,
+            HazardRow.deleted_at.is_(None),
+        )
         .order_by(HazardRow.created_at.desc())
     )
     rows = list(db.scalars(statement).all())
@@ -90,7 +94,7 @@ def read_hazard(
         HTTPException: No hazard has this id.
     """
     hazard = db.get(HazardRow, hazard_id)
-    if hazard is None:
+    if hazard is None or hazard.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Hazard was not found.",

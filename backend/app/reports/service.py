@@ -406,10 +406,10 @@ def _require_hazard(db: Session, hazard_id: uuid.UUID) -> Hazard:
         The hazard.
 
     Raises:
-        RejectedReport: No hazard has that id.
+        RejectedReport: No hazard has that id, or Facilities deleted it.
     """
     hazard = db.get(Hazard, hazard_id)
-    if hazard is None:
+    if hazard is None or hazard.deleted_at is not None:
         raise RejectedReport(404, "Hazard not found.")
     return hazard
 
