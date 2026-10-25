@@ -135,7 +135,7 @@ def store_photo(
         hazard_type: Type the member confirmed. Replaces the vision
             type when present. The vision summary stays.
         severity_score: Passage interference the member confirmed,
-            from 0 through 100. Replaces the vision score when present.
+            from 1 through 10. Replaces the vision score when present.
         manual: The member's own type, severity, and summary for a photo
             that is not classified.
 

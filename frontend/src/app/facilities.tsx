@@ -309,7 +309,7 @@ function HazardRow({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={`${type}, severity ${hazard.severityScore} of 100, ${hazard.status}`}
+      accessibilityLabel={`${type}, severity ${hazard.severityScore} of 10, ${hazard.status}`}
       onPress={onPress}
       style={[
         styles.row,
@@ -400,7 +400,7 @@ function HazardDetail({
             {type}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Severity {hazard.severityScore}/100 · {hazard.reportCount}{' '}
+            Severity {hazard.severityScore}/10 · {hazard.reportCount}{' '}
             {hazard.reportCount === 1 ? 'report' : 'reports'}
           </ThemedText>
         </View>

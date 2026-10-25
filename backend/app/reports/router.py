@@ -112,7 +112,7 @@ async def create_photo_report(
         hazard_type: Type the member confirmed after the preview.
             Omit to keep the vision type.
         severity_score: Passage interference the member confirmed,
-            from 0 through 100. Omit to keep the vision score.
+            from 1 through 10. Omit to keep the vision score.
         classify_photo: False skips the vision call. Then hazard_type,
             severity_score, and description are required.
         category: Numeric code for an unclassified photo. Defaults to 0.
@@ -236,20 +236,20 @@ def _member_score(value: int | None) -> int | None:
     """Reads a confirmed severity, or leaves the vision score.
 
     Args:
-        value: Passage interference from 0 through 100, or nothing.
+        value: Passage interference from 1 through 10, or nothing.
 
     Returns:
         The score, or None when the field was omitted.
 
     Raises:
-        HTTPException: The score is outside 0 through 100.
+        HTTPException: The score is outside 1 through 10.
     """
     if value is None:
         return None
-    if value < 0 or value > 100:
+    if value < 1 or value > 10:
         raise HTTPException(
             status_code=422,
-            detail="Severity is from 0 through 100.",
+            detail="Severity is from 1 through 10.",
         )
     return value
 

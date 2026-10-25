@@ -142,22 +142,19 @@ def preview_classification(
 
 
 def image_severity(score: int) -> int:
-    """Maps a 0–100 passage score onto the 1–10 preview scale.
-
-    Half scores round away from zero, matching the pin color scale.
+    """Clamps a passage score onto the 1–10 scale.
 
     Args:
-        score: Passage interference from 0 through 100.
+        score: Passage interference from 1 through 10.
 
     Returns:
         A score from 1 through 10.
     """
-    rounded = int(score / 10 + 0.5)
-    if rounded < 1:
+    if score < 1:
         return 1
-    if rounded > 10:
+    if score > 10:
         return 10
-    return rounded
+    return score
 
 
 def location_adjustment(

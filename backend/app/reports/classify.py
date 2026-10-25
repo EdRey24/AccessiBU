@@ -48,9 +48,9 @@ PROMPT = (
     "definition of the number: choose any whole number that "
     "identifies the condition, and use the same number when the "
     "condition is the same. The number is not a severity. "
-    "severity_score must be an integer from 1 through 100. "
+    "severity_score must be an integer from 1 through 10. "
     "It is how much the condition interferes with passage. "
-    "1 means barely in the way and 100 means fully blocked. "
+    "1 means barely in the way and 10 means fully blocked. "
     "summary must be a short non-empty sentence about the "
     "condition in the photo."
 )
@@ -133,7 +133,7 @@ def parse_classification(payload: object) -> Classification:
     hazard_type = _hazard_type(payload["hazard_type"])
     category = _integer(payload["category"])
     severity_score = _integer(payload["severity_score"])
-    if severity_score < 1 or severity_score > 100:
+    if severity_score < 1 or severity_score > 10:
         raise ClassificationError(
             "The vision call did not return a Classification."
         )

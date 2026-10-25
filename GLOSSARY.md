@@ -33,7 +33,7 @@ The numeric code on a Report, alongside its hazard type.
 _Avoid_: label, type
 
 **Severity**:
-A score on a Hazard for how much the condition interferes with passage, higher meaning more blocked. Classification of a photo is from 1 to 100, and on a text Report the Member chooses the score, from 0 to 100.
+A score from 1 to 10 on a Hazard for how much the condition interferes with passage, higher meaning more blocked.
 _Avoid_: low, medium, high, label
 
 **Summary**:

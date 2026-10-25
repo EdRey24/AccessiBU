@@ -23,7 +23,7 @@ _VALID = {
     "is_hazard": True,
     "hazard_type": "blockage",
     "category": 4,
-    "severity_score": 100,
+    "severity_score": 10,
     "summary": "A door is blocked.",
 }
 
@@ -37,7 +37,7 @@ class ParseClassificationTests(unittest.TestCase):
         self.assertIsInstance(result, Classification)
         self.assertEqual(result.hazard_type, HazardType.BLOCKAGE)
         self.assertEqual(result.category, 4)
-        self.assertEqual(result.severity_score, 100)
+        self.assertEqual(result.severity_score, 10)
         self.assertEqual(result.summary, "A door is blocked.")
 
         odd = dict(_VALID)
@@ -74,10 +74,10 @@ class ParseClassificationTests(unittest.TestCase):
         with self.assertRaises(ClassificationError):
             parse_classification(payload)
 
-    def test_rejects_score_of_101(self) -> None:
-        """A severity score of 101 is a classification error."""
+    def test_rejects_score_of_11(self) -> None:
+        """A severity score of 11 is a classification error."""
         payload = dict(_VALID)
-        payload["severity_score"] = 101
+        payload["severity_score"] = 11
         with self.assertRaises(ClassificationError):
             parse_classification(payload)
 
@@ -166,7 +166,7 @@ class ClassifyTests(unittest.TestCase):
                 request.assert_called_once()
                 self.assertEqual(result.hazard_type, HazardType.BLOCKAGE)
                 self.assertEqual(result.category, 4)
-                self.assertEqual(result.severity_score, 100)
+                self.assertEqual(result.severity_score, 10)
                 self.assertEqual(result.summary, "A door is blocked.")
 
     def test_request_raises_classification_error(self) -> None:

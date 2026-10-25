@@ -45,7 +45,7 @@ class Hazard(Base):
             hazard. Only Facilities can, by reopening it.
         created_at: When the hazard was stored.
         severity_score: How much the condition interferes with passage,
-            from 0 through 100. Higher means more blocked.
+            from 1 through 10. Higher means more blocked.
         resolved_at: When Facilities marked the hazard resolved. Null
             while it is open, including after a reopen.
         resolved_by: The admin who resolved it. Null while it is open.
@@ -64,7 +64,7 @@ class Hazard(Base):
             name="ck_hazards_longitude",
         ),
         CheckConstraint(
-            "severity_score BETWEEN 0 AND 100",
+            "severity_score BETWEEN 1 AND 10",
             name="ck_hazards_severity_score",
         ),
         CheckConstraint(

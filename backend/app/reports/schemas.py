@@ -32,7 +32,7 @@ class Classification(BaseModel):
 
     hazard_type: HazardType
     category: int
-    severity_score: int = Field(ge=0, le=100)
+    severity_score: int = Field(ge=1, le=10)
     summary: str = Field(min_length=1)
 
 
@@ -104,7 +104,7 @@ class TextReportCreate(BaseModel):
     hazard_type: HazardType
     category: int
     description: str = Field(min_length=1)
-    severity_score: int = Field(ge=0, le=100)
+    severity_score: int = Field(ge=1, le=10)
 
     @field_validator("description")
     @classmethod

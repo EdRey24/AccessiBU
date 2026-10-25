@@ -80,21 +80,21 @@ const TYPE_FROM_STORED: Record<StoredHazardType, HazardType> = {
   other: 'Other',
 };
 
-/** Converts a 1–10 pin severity to the backend's 0–100 score. */
+/** Keeps a severity on the 1–10 scale. */
 export function severityScoreFromPin(severity: number): number {
-  return Math.max(0, Math.min(100, Math.round(severity * 10)));
+  return Math.max(1, Math.min(10, Math.round(severity)));
 }
 
-/** Converts a stored 0–100 score onto the 1–10 pin color scale. */
+/** Keeps a stored severity on the 1–10 pin color scale. */
 export function pinSeverityFromScore(score: number): number {
-  return Math.max(1, Math.min(10, Math.round(score / 10)));
+  return Math.max(1, Math.min(10, Math.round(score)));
 }
 
 /** What a manual report needs to open a shared hazard. */
 export type TextReportInput = {
   type: HazardType;
   description: string;
-  severity: number; // 1–10 pin scale
+  severity: number; // 1–10
   latitude: number;
   longitude: number;
   /** Floor the pin sits on (null when outside / no plan). */
