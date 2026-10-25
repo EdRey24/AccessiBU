@@ -113,8 +113,12 @@ def store_photo(
     description: str | None = None,
     hazard_type: HazardType | None = None,
     severity_score: int | None = None,
+    manual: Classification | None = None,
 ) -> PhotoReport:
     """Stores a photo report after the vision call succeeds.
+
+    When manual is given the vision call is skipped and those values are
+    stored as the member entered them.
 
     Args:
         db: Open database session.
@@ -127,6 +131,8 @@ def store_photo(
             type when present. The vision summary stays.
         severity_score: Passage interference the member confirmed,
             from 0 through 100. Replaces the vision score when present.
+        manual: The member's own type, severity, and summary for a photo
+            that is not classified.
 
     Returns:
         The stored photo report.
@@ -143,7 +149,11 @@ def store_photo(
         _require_open(db, place.hazard_id)
     put_object(path, image, inspected.media_type)
     try:
-        classification = _classify(image, inspected.media_type, description)
+        classification = (
+            manual
+            if manual is not None
+            else _classify(image, inspected.media_type, description)
+        )
         if hazard_type is not None:
             classification = classification.model_copy(
                 update={"hazard_type": hazard_type},

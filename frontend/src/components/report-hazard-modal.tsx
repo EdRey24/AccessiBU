@@ -14,10 +14,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
     buildSpatialContext,
+    CDS_FLOORS,
     floorLabel,
     floorPlanImage,
     gpsToPlanXY,
     HAZARD_TYPES,
+    planXYToGps,
     type Location as HazardLocation,
     type HazardType,
 } from '@/constants/hazards';
@@ -26,8 +28,13 @@ import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
 import { failureMessage } from '@/services/api';
 import { classifyHazard } from '@/services/classifier';
-import { resolveFloor2Location } from '@/services/floor-geo';
-import { severityScoreFromPin, storedHazardType } from '@/services/hazards';
+import { resolveFloor2Location, type ResolvedLocation } from '@/services/floor-geo';
+import {
+    hazardCategory,
+    severityScoreFromPin,
+    storedHazardType,
+    submitTextReport,
+} from '@/services/hazards';
 import { submitPhotoReport } from '@/services/reports';
 
 import { CameraCapture } from './camera-capture';
@@ -42,11 +49,45 @@ type ReportHazardModalProps = {
 
 type Coords = { latitude: number; longitude: number; accuracy: number | null };
 
+/**
+ * How the member reports.
+ *   photo  — the camera photo is classified, and the AI suggests type + severity.
+ *   manual — the member picks type + severity. A photo is optional and is stored
+ *            as a plain attachment without classification. Facilities confirms
+ *            the severity on site.
+ */
+type ReportMethod = 'photo' | 'manual';
+
+const DEFAULT_SEVERITY = 5;
+
+/** The AI photo flow is built on the digitized Floor 2 plan. */
+const PHOTO_FLOOR = 2;
+
+/** Floors a manual report can be filed on: Basement first, up to the top floor. */
+const MANUAL_FLOOR_OPTIONS = [...CDS_FLOORS]
+  .sort((a, b) => a.value - b.value)
+  .map((f) => ({ value: f.value, label: f.label }));
+
+/**
+ * Real-world location for a pin. Floor 2 uses its digitized room map; other
+ * floors have only the plan image, so the pin is interpolated over the
+ * building corners and has no room.
+ */
+function resolvePin(
+  floor: number,
+  pin: { x: number; y: number }
+): Pick<ResolvedLocation, 'room' | 'coordinate'> {
+  if (floor === PHOTO_FLOOR) return resolveFloor2Location(pin);
+  return { room: null, coordinate: planXYToGps(pin) };
+}
+
 export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { addHazard } = useHazards();
 
+  const [method, setMethod] = useState<ReportMethod>('photo');
+  const isPhoto = method === 'photo';
   const [cameraOpen, setCameraOpen] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
@@ -62,17 +103,19 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     description: string;
     reason: string;
   } | null>(null);
-  // Confirmed type. Seeded from the model, then editable.
+  // Photo flow: seeded from the model, then editable. Manual flow: picked by the member.
   const [hazardType, setHazardType] = useState<HazardType>('Spill');
-  const [severity, setSeverity] = useState(5);
+  const [severity, setSeverity] = useState(DEFAULT_SEVERITY);
   const [description, setDescription] = useState('');
   // One classification per photo. Later edits do not start another call.
   const classifiedPhoto = useRef<string | null>(null);
+  const classificationId = useRef(0);
 
   const location: HazardLocation = 'inside';
   const [coords, setCoords] = useState<Coords | null>(null);
-  // Reporting is limited to the digitized Floor 2 plan.
-  const floor = 2;
+  // The photo flow stays on Floor 2. A manual report can pick any floor.
+  const [manualFloor, setManualFloor] = useState(PHOTO_FLOOR);
+  const floor = isPhoto ? PHOTO_FLOOR : manualFloor;
   // Start with a center pin so the user just drags it to the exact spot.
   const [position, setPosition] = useState<{ x: number; y: number } | null>({ x: 0.5, y: 0.5 });
 
@@ -80,17 +123,31 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   // indoors, so the user still drags the pin to the exact spot).
   const userDot = coords ? gpsToPlanXY(coords) : null;
 
-  const reset = () => {
-    setPhotoUri(null);
+  const clearClassification = () => {
+    classificationId.current += 1;
+    classifiedPhoto.current = null;
+    setResult(null);
     setAnalyzing(false);
+  };
+
+  const reset = () => {
+    setMethod('photo');
+    setPhotoUri(null);
     setSubmitting(false);
     setSubmitError(null);
-    setResult(null);
+    clearClassification();
     setHazardType('Spill');
-    setSeverity(5);
-    classifiedPhoto.current = null;
+    setSeverity(DEFAULT_SEVERITY);
     setDescription('');
     setCoords(null);
+    setManualFloor(PHOTO_FLOOR);
+    setPosition({ x: 0.5, y: 0.5 });
+  };
+
+  // A pin from one floor means nothing on another, so re-center it.
+  const chooseFloor = (next: number) => {
+    if (next === manualFloor) return;
+    setManualFloor(next);
     setPosition({ x: 0.5, y: 0.5 });
   };
 
@@ -117,10 +174,10 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     }
   };
 
-  const classificationId = useRef(0);
-  // One classification after the photo and description are both set.
-  // Moving the pin or editing the description again does not start another.
+  // Photo flow only: one classification after the photo and description are
+  // both set. Moving the pin or editing the description again does not re-run it.
   useEffect(() => {
+    if (method !== 'photo') return;
     const written = description.trim();
     if (!photoUri || !written || !position || classifiedPhoto.current === photoUri) return;
     const pin = position;
@@ -152,41 +209,80 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
         });
     }, 800);
     return () => clearTimeout(timer);
-  }, [photoUri, description, position, coords, floor]);
+  }, [method, photoUri, description, position, coords, floor]);
 
-  // Photo captured -> detect building. A new photo can be classified once.
+  const chooseMethod = (next: ReportMethod) => {
+    if (next === method) {
+      if (next === 'photo' && !photoUri) setCameraOpen(true);
+      return;
+    }
+    setMethod(next);
+    setSubmitError(null);
+    clearClassification();
+    setPhotoUri(null);
+    setHazardType('Spill');
+    setSeverity(DEFAULT_SEVERITY);
+    if (manualFloor !== PHOTO_FLOOR) setPosition({ x: 0.5, y: 0.5 });
+    setManualFloor(PHOTO_FLOOR);
+    if (next === 'photo') setCameraOpen(true);
+    else void detectBuilding();
+  };
+
+  // Photo captured -> detect building. In the photo flow it is then classified once.
   const handleCapture = async (uri: string) => {
     setPhotoUri(uri);
-    setResult(null);
-    setAnalyzing(false);
-    classifiedPhoto.current = null;
+    clearClassification();
     setCameraOpen(false);
     await detectBuilding();
   };
 
   const note = description.trim();
-  const canSubmit =
-    !analyzing && !submitting && !!photoUri && note.length > 0 && !!position && !!result;
+  const canSubmit = isPhoto
+    ? !analyzing && !submitting && !!photoUri && note.length > 0 && !!position && !!result
+    : !submitting && note.length > 0 && !!position;
 
   const submit = async () => {
-    if (!canSubmit || submitting || !photoUri || !position || !result) return;
+    if (!canSubmit || submitting || !position) return;
+    if (isPhoto && (!photoUri || !result)) return;
     const spatialContext = buildSpatialContext(floor, position, coords);
-    const resolved = resolveFloor2Location(position);
+    const resolved = resolvePin(floor, position);
     const confirmedScore = severityScoreFromPin(severity);
 
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const stored = await submitPhotoReport({
-        uri: photoUri,
-        latitude: resolved.coordinate.latitude,
-        longitude: resolved.coordinate.longitude,
-        floor,
-        position,
-        description: note,
-        hazardType: storedHazardType(hazardType),
-        severityScore: confirmedScore,
-      });
+      let stored: {
+        hazardId: string;
+        createdAt: number;
+        hazardType: ReturnType<typeof storedHazardType>;
+        summary: string;
+        severityScore: number | null;
+      };
+      if (photoUri) {
+        // Photo flow is classified. A photo attached to a manual report is not.
+        stored = await submitPhotoReport({
+          uri: photoUri,
+          latitude: resolved.coordinate.latitude,
+          longitude: resolved.coordinate.longitude,
+          floor,
+          position,
+          description: note,
+          hazardType: storedHazardType(hazardType),
+          severityScore: confirmedScore,
+          classify: isPhoto,
+          category: isPhoto ? null : hazardCategory(hazardType),
+        });
+      } else {
+        stored = await submitTextReport({
+          type: hazardType,
+          description: note,
+          severity,
+          latitude: resolved.coordinate.latitude,
+          longitude: resolved.coordinate.longitude,
+          floor,
+          position,
+        });
+      }
       addHazard({
         id: stored.hazardId,
         createdAt: stored.createdAt,
@@ -198,10 +294,10 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
         location,
         floor,
         position,
-        method: 'photo',
+        method,
         photoUri,
         spatialContext,
-        severityReason: result.reason,
+        severityReason: isPhoto ? result?.reason : 'Reported by the member. Facilities will confirm.',
         room: resolved.room,
         coordinate: resolved.coordinate,
       });
@@ -214,7 +310,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   };
 
   const missing: string[] = [];
-  if (!photoUri) missing.push('photo');
+  if (isPhoto && !photoUri) missing.push('photo');
   if (!note) missing.push('description');
   if (!position) missing.push('pin');
 
@@ -241,26 +337,72 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled">
+            {/* Report method: AI-classified photo, or manual (camera optional). */}
+            <View style={styles.methodRow} accessibilityRole="radiogroup">
+              <MethodButton
+                label="📷 Take a photo"
+                active={isPhoto}
+                onPress={() => chooseMethod('photo')}
+              />
+              <MethodButton
+                label="📋 Manual report"
+                active={!isPhoto}
+                onPress={() => chooseMethod('manual')}
+              />
+            </View>
+
             {photoUri ? (
               <>
                 <Image source={{ uri: photoUri }} style={styles.preview} contentFit="cover" />
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setCameraOpen(true)}
-                  style={styles.retake}>
-                  <ThemedText type="small" style={{ color: BU.red }}>
-                    Retake photo
-                  </ThemedText>
-                </Pressable>
+                <View style={styles.photoActions}>
+                  <Pressable accessibilityRole="button" onPress={() => setCameraOpen(true)}>
+                    <ThemedText type="small" style={{ color: BU.red }}>
+                      Retake photo
+                    </ThemedText>
+                  </Pressable>
+                  {!isPhoto ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setPhotoUri(null)}>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Remove photo
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
+                </View>
               </>
             ) : (
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setCameraOpen(true)}
                 style={[styles.photoButton, { borderColor: theme.border }]}>
-                <ThemedText type="smallBold">Take a photo</ThemedText>
+                <ThemedText type="smallBold">
+                  {isPhoto ? 'Open camera' : 'Add a photo (optional)'}
+                </ThemedText>
+                {!isPhoto ? (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Attached as-is. It is not analyzed.
+                  </ThemedText>
+                ) : null}
               </Pressable>
             )}
+
+            {!isPhoto ? (
+              <>
+                <ThemedText type="smallBold" style={styles.label}>
+                  Hazard type *
+                </ThemedText>
+                <HazardTypeDropdown value={hazardType} onChange={setHazardType} />
+
+                <ThemedText type="smallBold" style={styles.label}>
+                  Severity *
+                </ThemedText>
+                <SeverityStepper value={severity} onChange={setSeverity} />
+                <ThemedText type="small" themeColor="textSecondary">
+                  Your estimate. Facilities will confirm the severity when they arrive.
+                </ThemedText>
+              </>
+            ) : null}
 
             <View style={styles.labelRow}>
               <ThemedText type="smallBold" style={styles.label}>
@@ -277,7 +419,9 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               onChangeText={setDescription}
               multiline
               maxLength={1000}
-              placeholder="Describe the hazard in the photo…"
+              placeholder={
+                isPhoto ? 'Describe the hazard in the photo…' : 'Describe the hazard and where it is…'
+              }
               placeholderTextColor={theme.textSecondary}
               style={[
                 styles.textArea,
@@ -285,21 +429,27 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               ]}
             />
 
-            <View style={styles.labelRow}>
-              <ThemedText type="smallBold" style={styles.label}>
-                Floor
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {floorLabel(floor)}
-              </ThemedText>
-            </View>
+            {isPhoto ? (
+              <View style={styles.labelRow}>
+                <ThemedText type="smallBold" style={styles.label}>
+                  Floor
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {floorLabel(floor)}
+                </ThemedText>
+              </View>
+            ) : (
+              <>
+                <ThemedText type="smallBold" style={styles.label}>
+                  Floor *
+                </ThemedText>
+                <Dropdown value={manualFloor} onChange={chooseFloor} options={MANUAL_FLOOR_OPTIONS} />
+              </>
+            )}
 
             <View style={styles.labelRow}>
               <ThemedText type="smallBold" style={styles.label}>
                 Drag the pin to the exact spot
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                🛗 🪜 shown for context
               </ThemedText>
             </View>
             <FloorPlan
@@ -312,14 +462,14 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               caption={floorLabel(floor)}
             />
 
-            {analyzing && !result ? (
+            {isPhoto && analyzing && !result ? (
               <View style={[styles.banner, { backgroundColor: theme.backgroundElement }]}>
                 <ActivityIndicator color={BU.red} />
                 <ThemedText type="small">Classifying hazard and severity…</ThemedText>
               </View>
             ) : null}
 
-            {result ? (
+            {isPhoto && result ? (
               <>
                 <ThemedText type="smallBold" style={styles.label}>
                   Hazard type
@@ -364,7 +514,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               style={{ color: canSubmit ? '#fff' : theme.textSecondary }}>
               {submitting
                 ? 'Saving report…'
-                : analyzing
+                : isPhoto && analyzing
                   ? 'Classifying…'
                   : missing.length
                     ? `Add ${missing.join(' & ')} to submit`
@@ -385,6 +535,71 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
 
 function asHazardType(value: string): HazardType {
   return (HAZARD_TYPES as readonly string[]).includes(value) ? (value as HazardType) : 'Other';
+}
+
+function MethodButton({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={[
+        styles.methodButton,
+        {
+          borderColor: active ? BU.red : theme.border,
+          backgroundColor: active ? BU.red : theme.background,
+        },
+      ]}>
+      <ThemedText type="smallBold" style={{ color: active ? '#fff' : theme.text }}>
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
+/** 1–10 severity picker for manual reports. */
+function SeverityStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.stepper, { borderColor: theme.border }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Decrease severity"
+        disabled={value <= 1}
+        onPress={() => onChange(Math.max(1, value - 1))}
+        style={styles.stepperBtn}>
+        <ThemedText type="subtitle" themeColor={value <= 1 ? 'backgroundSelected' : 'textSecondary'}>
+          −
+        </ThemedText>
+      </Pressable>
+      <View
+        style={styles.stepperValue}
+        accessibilityRole="adjustable"
+        accessibilityLabel={`Severity ${value} out of 10`}>
+        <View style={[styles.severityDot, { backgroundColor: severityColor(value) }]} />
+        <ThemedText type="default">{value}/10</ThemedText>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Increase severity"
+        disabled={value >= 10}
+        onPress={() => onChange(Math.min(10, value + 1))}
+        style={styles.stepperBtn}>
+        <ThemedText type="subtitle" themeColor={value >= 10 ? 'backgroundSelected' : 'textSecondary'}>
+          +
+        </ThemedText>
+      </Pressable>
+    </View>
+  );
 }
 
 function HazardTypeDropdown({
@@ -422,13 +637,26 @@ const styles = StyleSheet.create({
   closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   scroll: { flexGrow: 0 },
   scrollContent: { gap: Spacing.three, paddingBottom: Spacing.three },
+  methodRow: { flexDirection: 'row', gap: Spacing.three },
+  methodButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: Spacing.five,
+    paddingVertical: Spacing.three,
+    alignItems: 'center',
+  },
   photoButton: {
     borderWidth: 1,
     borderRadius: Spacing.three,
     paddingVertical: Spacing.four,
     alignItems: 'center',
+    gap: Spacing.one,
   },
-  retake: { alignSelf: 'flex-start', marginTop: -Spacing.two },
+  photoActions: {
+    flexDirection: 'row',
+    gap: Spacing.four,
+    marginTop: -Spacing.two,
+  },
   preview: { width: '100%', aspectRatio: 16 / 9, borderRadius: Spacing.three },
   submitError: { color: BU.red, marginBottom: Spacing.two },
   banner: {
@@ -451,6 +679,17 @@ const styles = StyleSheet.create({
   },
   severityBadgeText: { color: '#fff', fontSize: 16 },
   severityMath: { flex: 1 },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    paddingHorizontal: Spacing.two,
+  },
+  stepperBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  stepperValue: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  severityDot: { width: 12, height: 12, borderRadius: 6 },
   textArea: {
     borderWidth: 1,
     borderRadius: Spacing.three,

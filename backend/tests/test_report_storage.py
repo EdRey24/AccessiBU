@@ -278,6 +278,59 @@ def test_photo_report_keeps_the_member_type_and_severity(
     assert hazard.json()["severity_score"] == 40
 
 
+def test_unclassified_photo_skips_the_vision_call(
+    client: TestClient,
+    objects: dict[str, tuple[bytes, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """classify=false stores the member's values and never calls vision."""
+    monkeypatch.setattr(
+        "app.reports.service._classify",
+        lambda image, media_type, description=None: pytest.fail(
+            "vision was called"
+        ),
+    )
+    response = client.post(
+        "/reports/photo",
+        data={
+            **PLACE,
+            "classify": "false",
+            "hazard_type": "spill",
+            "severity_score": "60",
+            "category": "1",
+            "description": "  Coffee spilled by the stairs.  ",
+        },
+        files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["hazard_type"] == "spill"
+    assert body["category"] == 1
+    assert body["summary"] == "Coffee spilled by the stairs."
+    assert body["image_path"] in objects
+    hazard = client.get(f"/hazards/{body['hazard_id']}")
+    assert hazard.json()["severity_score"] == 60
+
+
+def test_unclassified_photo_needs_the_member_values(
+    client: TestClient,
+    objects: dict[str, tuple[bytes, str]],
+) -> None:
+    """classify=false without a severity is rejected before upload."""
+    response = client.post(
+        "/reports/photo",
+        data={
+            **PLACE,
+            "classify": "false",
+            "hazard_type": "spill",
+            "description": "Coffee spilled.",
+        },
+        files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 422
+    assert objects == {}
+
+
 def test_photo_report_rejects_an_unknown_type(client: TestClient) -> None:
     """A type outside the stored set is rejected before upload."""
     response = client.post(
