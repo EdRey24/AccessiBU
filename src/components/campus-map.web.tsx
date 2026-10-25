@@ -90,10 +90,16 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
   const mapRef = useRef<any>(null);
   const glRef = useRef<any>(null);
   const chipMarkerRef = useRef<any>(null);
-  const hazardMarkersRef = useRef<any[]>([]);
 
   const inside = hazards.filter((h) => h.location === 'inside');
   const count = inside.length;
+  // Latest count, readable from the one-time map 'load' handler. Without it the
+  // chip is built with the count captured at mount (usually 0) and can miss
+  // updates that arrive before the map finishes loading.
+  const countRef = useRef(count);
+  useEffect(() => {
+    countRef.current = count;
+  }, [count]);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,7 +139,7 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
 
         map.on('load', () => {
           // CDS chip marker — anchored bottom so the bubble sits above the point.
-          const chipEl = makeChipEl(count, onSelectBuilding);
+          const chipEl = makeChipEl(countRef.current, onSelectBuilding);
           chipMarkerRef.current = new mapboxgl.Marker({ element: chipEl, anchor: 'bottom' })
             .setLngLat([CDS_LOCATION.longitude, CDS_LOCATION.latitude])
             .addTo(map);
@@ -142,9 +148,6 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
             const show = map.getZoom() >= CHIP_MIN_ZOOM;
             const elAny = chipMarkerRef.current?.getElement?.();
             if (elAny) elAny.style.display = show ? 'block' : 'none';
-            hazardMarkersRef.current.forEach((m) => {
-              m.getElement().style.display = show ? 'flex' : 'none';
-            });
           };
           applyZoomVisibility();
           map.on('zoom', applyZoomVisibility);
@@ -160,61 +163,17 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep the chip count label current.
+  // Keep the chip count label current. Runs on every render (cheap DOM text
+  // write) so it also catches a chip that was created after the last change.
   useEffect(() => {
-    const m = chipMarkerRef.current;
-    if (!m) return;
-    const el = m.getElement();
+    const el = chipMarkerRef.current?.getElement?.();
     const sub = el?.children?.[1] as HTMLElement | undefined;
-    if (sub) sub.textContent = `${count} ${count === 1 ? 'hazard' : 'hazards'}`;
-  }, [count]);
+    const label = `${count} ${count === 1 ? 'hazard' : 'hazards'}`;
+    if (sub && sub.textContent !== label) sub.textContent = label;
+  });
 
-  // Sync individual hazard markers.
-  useEffect(() => {
-    const map = mapRef.current;
-    const mapboxgl = glRef.current;
-    if (!map || !mapboxgl) return;
-
-    const draw = () => {
-      hazardMarkersRef.current.forEach((m) => m.remove());
-      hazardMarkersRef.current = [];
-      inside.forEach((h, i) => {
-        const el = document.createElement('div');
-        el.textContent = String(h.severity);
-        el.setAttribute('role', 'button');
-        el.setAttribute('aria-label', `${h.type}, severity ${h.severity}. View on floor plan.`);
-        Object.assign(el.style, {
-          width: '28px',
-          height: '28px',
-          borderRadius: '14px',
-          border: '2px solid #fff',
-          background: BU.red,
-          color: '#fff',
-          fontSize: '12px',
-          fontWeight: '700',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-        });
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          onSelectHazard(h);
-        });
-        const marker = new mapboxgl.Marker({ element: el })
-          .setLngLat([
-            CDS_LOCATION.longitude + (i % 3) * 0.00009 - 0.00009,
-            CDS_LOCATION.latitude + Math.floor(i / 3) * 0.00007 + 0.00006,
-          ])
-          .addTo(map);
-        hazardMarkersRef.current.push(marker);
-      });
-    };
-
-    if (map.loaded()) draw();
-    else map.once('load', draw);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hazards, onSelectHazard]);
+  // Individual hazards are not drawn on the 3D map — the CDS chip shows the
+  // count, and hazards are viewed on the 2D floor plans.
 
   return (
     <View style={styles.container}>

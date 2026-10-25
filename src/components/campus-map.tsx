@@ -81,26 +81,6 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
           </MarkerView>
         )}
 
-        {/* Individual hazard pins */}
-        {showChip &&
-          insideHazards.map((h, i) => (
-            <MarkerView
-              key={h.id}
-              coordinate={[
-                CDS_LOCATION.longitude + (i % 3) * 0.00012 - 0.00012,
-                CDS_LOCATION.latitude + Math.floor(i / 3) * 0.0001 + 0.0002,
-              ]}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${h.type}, severity ${h.severity}. Tap to view on floor plan.`}
-                onPress={() => onSelectHazard(h)}
-                style={[styles.pin, { backgroundColor: BU.red }]}>
-                <ThemedText type="smallBold" style={styles.pinText}>
-                  {h.severity}
-                </ThemedText>
-              </Pressable>
-            </MarkerView>
-          ))}
       </MapView>
     </View>
   );
