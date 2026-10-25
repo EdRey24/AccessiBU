@@ -35,6 +35,7 @@ from app.reports.preview import (
 )
 from app.reports.models import HazardType
 from app.reports.schemas import (
+    Classification,
     OwnReport,
     PhotoReport,
     ReportEdit,
@@ -93,10 +94,16 @@ async def create_photo_report(
     description: Annotated[str | None, Form()] = None,
     hazard_type: Annotated[str | None, Form()] = None,
     severity_score: Annotated[int | None, Form()] = None,
+    classify_photo: Annotated[bool, Form(alias="classify")] = True,
+    category: Annotated[int | None, Form()] = None,
     member: Member = Depends(current_member),
     db: Session = Depends(get_db),
 ) -> PhotoReport:
     """Stores a photo report.
+
+    With classify set to false the vision call is skipped. The photo is
+    stored as an attachment, and the member's hazard type, severity, and
+    description are kept as given for Facilities to confirm on site.
 
     Args:
         image: The captured photo.
@@ -112,6 +119,9 @@ async def create_photo_report(
             Omit to keep the vision type.
         severity_score: Passage interference the member confirmed,
             from 0 through 100. Omit to keep the vision score.
+        classify_photo: False skips the vision call. Then hazard_type,
+            severity_score, and description are required.
+        category: Numeric code for an unclassified photo. Defaults to 0.
         member: The signed-in member.
         db: Open database session.
 
@@ -132,6 +142,15 @@ async def create_photo_report(
     )
     chosen_type = _member_type(hazard_type)
     chosen_score = _member_score(severity_score)
+    note = _note(description)
+    manual = None
+    if not classify_photo:
+        manual = _manual_classification(
+            chosen_type,
+            chosen_score,
+            note,
+            category,
+        )
     raw = await image.read(MAX_IMAGE_BYTES + 1)
     try:
         return store_photo(
@@ -139,9 +158,10 @@ async def create_photo_report(
             member,
             raw,
             place,
-            _note(description),
+            note,
             chosen_type,
             chosen_score,
+            manual=manual,
         )
     except RejectedReport as error:
         raise _rejected(error) from error
@@ -368,6 +388,42 @@ def _member_score(value: int | None) -> int | None:
             detail="Severity is from 0 through 100.",
         )
     return value
+
+
+def _manual_classification(
+    hazard_type: HazardType | None,
+    severity_score: int | None,
+    note: str | None,
+    category: int | None,
+) -> Classification:
+    """Builds the stored fields for a photo that skips the vision call.
+
+    Args:
+        hazard_type: Type the member chose.
+        severity_score: Passage interference the member chose.
+        note: What the member wrote. Becomes the photo summary.
+        category: Numeric code, or nothing for 0.
+
+    Returns:
+        The member's values in the shape the vision call returns.
+
+    Raises:
+        HTTPException: A required member value is missing.
+    """
+    if hazard_type is None or severity_score is None or note is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "An unclassified photo needs a hazard type, a severity, "
+                "and a description."
+            ),
+        )
+    return Classification(
+        hazard_type=hazard_type,
+        category=0 if category is None else category,
+        severity_score=severity_score,
+        summary=note,
+    )
 
 
 def _note(description: str | None) -> str | None:

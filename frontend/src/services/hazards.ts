@@ -65,6 +65,11 @@ export function storedHazardType(type: HazardType): StoredHazardType {
   return STORED_FROM_TYPE[type];
 }
 
+/** Numeric category stored alongside a UI hazard type. */
+export function hazardCategory(type: HazardType): number {
+  return HAZARD_CATEGORY[STORED_FROM_TYPE[type]];
+}
+
 /** Maps the backend's stored enum back to a UI hazard type. */
 const TYPE_FROM_STORED: Record<StoredHazardType, HazardType> = {
   spill: 'Spill',

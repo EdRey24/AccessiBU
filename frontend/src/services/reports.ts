@@ -52,6 +52,13 @@ export async function submitPhotoReport(input: {
   hazardType?: StoredHazardType | null;
   /** Passage interference the member confirmed, from 0 through 100. */
   severityScore?: number | null;
+  /**
+   * False stores the photo as a plain attachment: no vision call, and the
+   * member's type, severity, and description are kept as entered.
+   */
+  classify?: boolean;
+  /** Numeric code stored with an unclassified photo. */
+  category?: number | null;
 }): Promise<StoredPhotoReport> {
   if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
 
@@ -69,6 +76,8 @@ export async function submitPhotoReport(input: {
   if (input.severityScore != null) {
     form.append('severity_score', String(input.severityScore));
   }
+  if (input.classify === false) form.append('classify', 'false');
+  if (input.category != null) form.append('category', String(input.category));
 
   const response = await apiFetch('/reports/photo', { method: 'POST', body: form });
   if (!response.ok) throw new ApiError(response.status, await errorDetail(response));

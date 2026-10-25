@@ -196,7 +196,8 @@ function FloorPickerSheet({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.floorList}>
-            {CDS_FLOORS.filter((f) => f.value === 2).map((f) => {
+            {/* Every floor for the demo, Basement first (most used) up to the top floor. */}
+            {[...CDS_FLOORS].sort((a, b) => a.value - b.value).map((f) => {
               const count = hazards.filter(
                 (h) => h.location === 'inside' && h.floor === f.value
               ).length;
