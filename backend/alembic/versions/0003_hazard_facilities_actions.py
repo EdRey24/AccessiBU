@@ -1,13 +1,12 @@
-"""Add resolve and soft-delete columns to hazards.
+"""Record facilities actions already stored on a hazard.
 
 Revision ID: 0003_hazard_facilities_actions
 Revises: 0002_hazard_floor_position
 Create Date: 2026-10-24
 
-Facilities can resolve a hazard and delete it. A resolve records when
-and by whom. A delete only stamps deleted_at, so no report, alert, or
-photo is removed and the hazard can be restored by clearing the column.
-All three columns are nullable, so existing rows need no backfill.
+The shared database already has these columns. The API image runs
+alembic upgrade on boot, which refuses to start when it cannot find the
+revision the database is stamped with.
 """
 
 import sqlalchemy as sa
@@ -21,18 +20,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Adds nullable resolved and deleted columns to hazards."""
+    """Adds resolution and deletion timestamps to hazards."""
     op.add_column(
         "hazards",
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.add_column(
         "hazards",
-        sa.Column(
-            "resolved_by",
-            postgresql.UUID(as_uuid=True),
-            nullable=True,
-        ),
+        sa.Column("resolved_by", postgresql.UUID(as_uuid=True), nullable=True),
     )
     op.add_column(
         "hazards",
@@ -48,7 +43,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drops the resolved and deleted columns from hazards."""
+    """Drops the facilities-action columns from hazards."""
     op.drop_constraint("fk_hazards_resolved_by", "hazards", type_="foreignkey")
     op.drop_column("hazards", "deleted_at")
     op.drop_column("hazards", "resolved_by")
