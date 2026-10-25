@@ -16,7 +16,7 @@ const MIN_FIT_PIN = 16;
 const WIDTH_SHARE = 0.04;
 
 export const MIN_ZOOM = 1;
-export const MAX_ZOOM = 4;
+export const MAX_ZOOM = 6;
 
 export type MarkerDims = {
   /** Diameter of the pin. */

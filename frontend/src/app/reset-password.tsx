@@ -1,7 +1,14 @@
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useState } from 'react';
+import {
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { BU, Spacing } from '@/constants/theme';
@@ -50,6 +57,7 @@ export default function ResetPasswordScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.background }]}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
         <ThemedText type="subtitle" style={styles.brand}>
           AccessiBU
@@ -107,12 +115,14 @@ export default function ResetPasswordScreen() {
           </ThemedText>
         </Pressable>
       </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, justifyContent: 'center', padding: Spacing.four },
+  screen: { flex: 1 },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: Spacing.four },
   card: { width: '100%', maxWidth: 420, alignSelf: 'center', gap: Spacing.two },
   brand: { color: BU.red, fontSize: 32, lineHeight: 38, fontWeight: '800' },
   heading: { marginTop: Spacing.three, marginBottom: Spacing.two },
