@@ -26,6 +26,9 @@ class Hazard(BaseModel):
         status: open or resolved.
         created_at: When the hazard was stored.
         severity_score: Passage interference from 0 through 100.
+        summary: The sentence to show for this hazard. A photo report
+            contributes the model summary. A text report contributes
+            what the member wrote. None when the hazard has no report.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -37,6 +40,7 @@ class Hazard(BaseModel):
     status: HazardStatus
     created_at: datetime
     severity_score: int = Field(ge=0, le=100)
+    summary: str | None = None
 
     # Backing columns (excluded from output; surfaced via `position` below).
     position_x: float | None = Field(default=None, exclude=True)

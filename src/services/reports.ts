@@ -2,8 +2,9 @@
  * Stores a photo report.
  *
  * POST /reports/photo takes the image and the place. Classification fills
- * the hazard type, category, summary, and severity. The severity is read
- * back from the hazard, because the photo report does not carry it.
+ * the hazard type, category, summary, and severity. A confirmed type and
+ * severity replace the vision values. The severity is read back from the
+ * hazard, because the photo report does not carry it.
  */
 
 import type { StoredHazardType } from '@/constants/hazards';
@@ -45,6 +46,11 @@ export async function submitPhotoReport(input: {
   longitude: number;
   floor?: number | null;
   position?: { x: number; y: number } | null;
+  description?: string | null;
+  /** Type the member confirmed after the preview. */
+  hazardType?: StoredHazardType | null;
+  /** Passage interference the member confirmed, from 0 through 100. */
+  severityScore?: number | null;
 }): Promise<StoredPhotoReport> {
   if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
 
@@ -56,6 +62,11 @@ export async function submitPhotoReport(input: {
   if (input.position) {
     form.append('position_x', String(input.position.x));
     form.append('position_y', String(input.position.y));
+  }
+  if (input.description?.trim()) form.append('description', input.description.trim());
+  if (input.hazardType) form.append('hazard_type', input.hazardType);
+  if (input.severityScore != null) {
+    form.append('severity_score', String(input.severityScore));
   }
 
   const response = await apiFetch('/reports/photo', { method: 'POST', body: form });

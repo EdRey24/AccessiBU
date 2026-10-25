@@ -3,12 +3,14 @@
  *
  * Preview classifier for reports that are not stored through the report API.
  * A Floor 2 photo is stored by submitPhotoReport, which classifies the image.
- * This client sends the PHOTO plus the resolved SPATIAL CONTEXT and expects
- * a hazard type, a 1–10 severity, and a short description.
+ * This client sends the PHOTO, the member's DESCRIPTION, and the resolved
+ * SPATIAL CONTEXT. Hazard type and severity come from the description and
+ * the image together.
  *
  * Contract (POST multipart/form-data to ${EXPO_PUBLIC_API_URL}/classify):
- *   - field "image":   the captured photo (file)
- *   - field "context": JSON string of SpatialContext (see constants/hazards.ts)
+ *   - field "image":       the captured photo (file)
+ *   - field "description": what the member wrote
+ *   - field "context":     JSON string of SpatialContext (see constants/hazards.ts)
  *
  * Expected JSON response:
  *   {
@@ -45,16 +47,23 @@ export type ClassifierResult = {
 
 export async function classifyHazard(
   photoUri: string | null,
-  context: SpatialContext
+  context: SpatialContext,
+  description: string,
 ): Promise<ClassifierResult> {
   if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
   if (!photoUri) throw new ApiError(0, 'A photo is required.');
-  return callBackend(photoUri, context);
+  if (!description.trim()) throw new ApiError(0, 'A description is required.');
+  return callBackend(photoUri, context, description.trim());
 }
 
-async function callBackend(photoUri: string, context: SpatialContext): Promise<ClassifierResult> {
+async function callBackend(
+  photoUri: string,
+  context: SpatialContext,
+  description: string,
+): Promise<ClassifierResult> {
   const form = new FormData();
   await appendPhoto(form, photoUri);
+  form.append('description', description);
   form.append('context', JSON.stringify(context));
 
   const res = await apiFetch('/classify', { method: 'POST', body: form });

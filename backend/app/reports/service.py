@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.hazards.models import Hazard, HazardStatus
 from app.members.models import Member
-from app.reports.models import Report, ReportKind
+from app.reports.models import HazardType, Report, ReportKind
 from app.reports.schemas import (
     Classification,
     PhotoReport,
@@ -21,7 +21,7 @@ from app.reports.schemas import (
     TextReport,
     TextReportSubmit,
 )
-from app.reports.storage import StorageError, delete_object, put_object
+from app.reports.storage import StorageError, delete_object, get_object, put_object
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -110,6 +110,9 @@ def store_photo(
     member: Member,
     image: bytes,
     place: ReportPlace,
+    description: str | None = None,
+    hazard_type: HazardType | None = None,
+    severity_score: int | None = None,
 ) -> PhotoReport:
     """Stores a photo report after the vision call succeeds.
 
@@ -118,6 +121,12 @@ def store_photo(
         member: The member who submitted the report.
         image: Raw image bytes.
         place: Where the photo belongs.
+        description: What the member wrote. The vision call uses it
+            with the photo.
+        hazard_type: Type the member confirmed. Replaces the vision
+            type when present. The vision summary stays.
+        severity_score: Passage interference the member confirmed,
+            from 0 through 100. Replaces the vision score when present.
 
     Returns:
         The stored photo report.
@@ -134,8 +143,17 @@ def store_photo(
         _require_open(db, place.hazard_id)
     put_object(path, image, inspected.media_type)
     try:
-        classification = _classify(image, inspected.media_type)
-        hazard = _hazard(db, place, classification.severity_score)
+        classification = _classify(image, inspected.media_type, description)
+        if hazard_type is not None:
+            classification = classification.model_copy(
+                update={"hazard_type": hazard_type},
+            )
+        score = (
+            classification.severity_score
+            if severity_score is None
+            else severity_score
+        )
+        hazard = _hazard(db, place, score)
         row = _photo_row(report_id, path, member, hazard, classification)
         db.add(row)
         db.commit()
@@ -204,6 +222,69 @@ def report_body(row: Report) -> PhotoReport | TextReport:
     return TextReport.model_validate(payload)
 
 
+def hazard_photo(db: Session, hazard_id: uuid.UUID) -> tuple[bytes, str]:
+    """Loads the photo stored for one hazard.
+
+    Args:
+        db: Open database session.
+        hazard_id: The hazard whose photo to load.
+
+    Returns:
+        The image bytes and their media type.
+
+    Raises:
+        RejectedReport: The hazard is missing, it has no photo, or
+            storage could not return the object.
+    """
+    _require_hazard(db, hazard_id)
+    row = db.scalar(
+        select(Report)
+        .where(
+            Report.hazard_id == hazard_id,
+            Report.kind == ReportKind.PHOTO,
+        )
+        .order_by(Report.created_at.asc()),
+    )
+    if row is None or row.image_path is None:
+        raise RejectedReport(404, "This hazard has no photo.")
+    try:
+        return get_object(row.image_path)
+    except StorageError as error:
+        raise RejectedReport(502, "The photo could not be loaded.") from error
+
+
+def report_summaries(
+    db: Session,
+    hazard_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, str]:
+    """The sentence stored for each hazard.
+
+    A later report replaces an earlier one. A photo contributes its
+    model summary. A text report contributes the member's note.
+
+    Args:
+        db: Open database session.
+        hazard_ids: Hazards whose sentences to load.
+
+    Returns:
+        Hazard id to the sentence to show. Hazards with no text are
+        absent.
+    """
+    if not hazard_ids:
+        return {}
+    rows = db.scalars(
+        select(Report)
+        .where(Report.hazard_id.in_(hazard_ids))
+        .order_by(Report.created_at.asc()),
+    ).all()
+    summaries: dict[uuid.UUID, str] = {}
+    for row in rows:
+        text = row.summary if row.kind is ReportKind.PHOTO else row.description
+        if text:
+            summaries[row.hazard_id] = text
+    return summaries
+
+
 def list_reports(db: Session, hazard_id: uuid.UUID) -> list[Report]:
     """Loads the reports that describe one hazard.
 
@@ -227,19 +308,24 @@ def list_reports(db: Session, hazard_id: uuid.UUID) -> list[Report]:
     )
 
 
-def _classify(image: bytes, media_type: str) -> Classification:
+def _classify(
+    image: bytes,
+    media_type: str,
+    description: str | None = None,
+) -> Classification:
     """Runs the one vision call.
 
     Args:
         image: Raw image bytes.
         media_type: Media type already checked for this file.
+        description: What the member wrote, or nothing.
 
     Returns:
         The classification to write onto the report and the hazard.
     """
     from app.reports.classify import classify
 
-    return classify(image, media_type)
+    return classify(image, media_type, description)
 
 
 def _classification_failed(error: Exception) -> bool:

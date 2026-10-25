@@ -43,12 +43,18 @@ class ClassificationError(Exception):
     """The vision call did not return a Classification."""
 
 
-def classify(image: bytes, media_type: str) -> Classification:
+def classify(
+    image: bytes,
+    media_type: str,
+    description: str | None = None,
+) -> Classification:
     """Classifies one photo with a single vision call.
 
     Args:
         image: Raw image bytes.
         media_type: image/jpeg, image/png, or image/heic.
+        description: What the member wrote about the hazard. The type
+            and severity come from this text and the photo together.
 
     Returns:
         The classification from the model.
@@ -60,7 +66,7 @@ def classify(image: bytes, media_type: str) -> Classification:
     if media_type not in _ACCEPTED_MEDIA_TYPES:
         raise ClassificationError("Unsupported media type.")
     try:
-        content = request_classification(image, media_type)
+        content = request_classification(image, media_type, description)
     except ClassificationError:
         raise
     except Exception as error:
@@ -116,12 +122,17 @@ def parse_classification(payload: object) -> Classification:
         ) from error
 
 
-def request_classification(image: bytes, media_type: str) -> str:
+def request_classification(
+    image: bytes,
+    media_type: str,
+    description: str | None = None,
+) -> str:
     """Posts the photo once and returns the assistant message text.
 
     Args:
         image: Raw image bytes.
         media_type: image/jpeg, image/png, or image/heic.
+        description: What the member wrote, included with the photo.
 
     Returns:
         The assistant message content, which should be a JSON object.
@@ -141,7 +152,7 @@ def request_classification(image: bytes, media_type: str) -> str:
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": PROMPT},
+                    {"type": "text", "text": _prompt(description)},
                     {
                         "type": "image_url",
                         "image_url": {"url": data_url},
@@ -172,6 +183,25 @@ def request_classification(image: bytes, media_type: str) -> str:
             "The vision call did not return a Classification."
         ) from error
     return _message_text(envelope)
+
+
+def _prompt(description: str | None) -> str:
+    """Builds the vision prompt from the photo instructions and the note.
+
+    Args:
+        description: What the member wrote, or nothing.
+
+    Returns:
+        The prompt. A blank note leaves the photo instructions alone.
+    """
+    note = "" if description is None else description.strip()
+    if note == "":
+        return PROMPT
+    return (
+        f"{PROMPT} The member wrote this description: {note} "
+        "Choose hazard_type and severity_score from the photo and "
+        "this description together."
+    )
 
 
 def _setting(name: str) -> str:

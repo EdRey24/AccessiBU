@@ -115,7 +115,11 @@ class ClassifyTests(unittest.TestCase):
         """A JSON string from the request becomes a Classification."""
         content = json.dumps(_VALID)
 
-        def fake_request(image: bytes, media_type: str) -> str:
+        def fake_request(
+            image: bytes,
+            media_type: str,
+            description: str | None = None,
+        ) -> str:
             self.assertEqual(image, b"photo")
             self.assertIn(
                 media_type,
@@ -138,7 +142,11 @@ class ClassifyTests(unittest.TestCase):
 
     def test_request_raises_classification_error(self) -> None:
         """A failed request becomes a classification error."""
-        def fake_request(image: bytes, media_type: str) -> str:
+        def fake_request(
+            image: bytes,
+            media_type: str,
+            description: str | None = None,
+        ) -> str:
             raise RuntimeError("timed out")
 
         with mock.patch(
@@ -150,7 +158,11 @@ class ClassifyTests(unittest.TestCase):
 
     def test_request_returns_non_json(self) -> None:
         """Non-JSON request text is a classification error."""
-        def fake_request(image: bytes, media_type: str) -> str:
+        def fake_request(
+            image: bytes,
+            media_type: str,
+            description: str | None = None,
+        ) -> str:
             return "not json"
 
         with mock.patch(
@@ -218,6 +230,43 @@ class ClassifyTests(unittest.TestCase):
                     "url": f"data:image/jpeg;base64,{encoded}",
                 },
             },
+        )
+
+    def test_prompt_includes_the_member_description(self) -> None:
+        """Hazard type and severity are asked to use the written note."""
+        captured: dict[str, object] = {}
+
+        def fake_post(url: str, **kwargs: object) -> "_Response":
+            captured["kwargs"] = kwargs
+            return _Response(
+                {
+                    "choices": [
+                        {"message": {"content": json.dumps(_VALID)}}
+                    ]
+                }
+            )
+
+        env = {
+            "VISION_API_URL": "https://vision.example/v1/chat/completions",
+            "VISION_API_KEY": "secret-key",
+            "VISION_MODEL": "vision-model",
+        }
+        with mock.patch.dict(os.environ, env):
+            with mock.patch(
+                "app.reports.classify.httpx.post",
+                side_effect=fake_post,
+            ):
+                classify(b"\xff\xd8\xff", "image/jpeg", "Cart in the doorway")
+        kwargs = captured["kwargs"]
+        self.assertIsInstance(kwargs, dict)
+        body = kwargs["json"]
+        self.assertIsInstance(body, dict)
+        content = body["messages"][0]["content"]
+        text = content[0]["text"]
+        self.assertIn("Cart in the doorway", text)
+        self.assertIn(
+            "from the photo and this description together",
+            text,
         )
 
     def test_http_failure_and_empty_body(self) -> None:

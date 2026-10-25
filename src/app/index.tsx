@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { Image } from 'expo-image';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,6 +12,8 @@ import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
 import { useSession } from '@/hooks/use-session';
 import { useTheme } from '@/hooks/use-theme';
+import { failureMessage } from '@/services/api';
+import { loadHazardPhoto } from '@/services/hazards';
 
 /** Either the 3D campus map, or a specific floor's 2D plan. */
 type Screen = { kind: 'map' } | { kind: 'floor'; floor: number };
@@ -168,7 +171,7 @@ function FloorPickerSheet({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.floorList}>
-            {CDS_FLOORS.map((f) => {
+            {CDS_FLOORS.filter((f) => f.value === 2).map((f) => {
               const count = hazards.filter(
                 (h) => h.location === 'inside' && h.floor === f.value
               ).length;
@@ -211,37 +214,86 @@ function HazardDetailSheet({
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const hazardId = hazard?.id ?? null;
+  const localPhoto = hazard?.photoUri ?? null;
+  const [loaded, setLoaded] = useState<{
+    id: string;
+    uri: string | null;
+    error: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!hazardId || localPhoto) return;
+    let active = true;
+    loadHazardPhoto(hazardId)
+      .then((uri) => {
+        if (active) setLoaded({ id: hazardId, uri, error: null });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setLoaded({
+          id: hazardId,
+          uri: null,
+          error: failureMessage(error, 'The photo could not be loaded.'),
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [hazardId, localPhoto]);
+
+  const settled = loaded?.id === hazardId ? loaded : null;
+  const photo = localPhoto ?? settled?.uri ?? null;
+  const loadingPhoto = hazardId !== null && !localPhoto && settled === null;
+
   return (
     <Modal visible={!!hazard} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         {hazard && (
           <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
-            <View style={styles.detailHeader}>
-              <View style={[styles.detailDot, { backgroundColor: severityColor(hazard.severity) }]} />
-              <ThemedText type="subtitle" style={styles.detailTitle}>
-                {hazard.hazardType ? storedHazardLabel(hazard.hazardType) : hazard.type}
-              </ThemedText>
-            </View>
-            <ThemedText type="small" themeColor="textSecondary">
-              {floorLabel(hazard.floor)} · {severityLabel(hazard)}
-            </ThemedText>
-            {hazard.room && (
+            <ScrollView style={styles.detailScroll} contentContainerStyle={styles.detailBody}>
+              {photo ? (
+                <Image
+                  source={{ uri: photo }}
+                  style={styles.detailPhoto}
+                  contentFit="cover"
+                  accessibilityLabel="Hazard photo"
+                />
+              ) : loadingPhoto ? (
+                <ActivityIndicator color={BU.red} />
+              ) : null}
+              {settled?.error ? (
+                <ThemedText type="small" style={styles.loadError} accessibilityRole="alert">
+                  {settled.error}
+                </ThemedText>
+              ) : null}
+              {hazard.description ? (
+                <ThemedText type="default">{hazard.description}</ThemedText>
+              ) : (
+                <ThemedText type="default" themeColor="textSecondary">
+                  No description provided.
+                </ThemedText>
+              )}
+              <View style={styles.detailHeader}>
+                <View style={[styles.detailDot, { backgroundColor: severityColor(hazard.severity) }]} />
+                <ThemedText type="subtitle" style={styles.detailTitle}>
+                  {hazard.hazardType ? storedHazardLabel(hazard.hazardType) : hazard.type}
+                </ThemedText>
+              </View>
               <ThemedText type="small" themeColor="textSecondary">
-                📍 {hazard.room.name} ({hazard.room.category})
+                {floorLabel(hazard.floor)} · {severityLabel(hazard)}
               </ThemedText>
-            )}
-            {hazard.coordinate && (
-              <ThemedText type="small" themeColor="textSecondary">
-                {hazard.coordinate.latitude.toFixed(6)}, {hazard.coordinate.longitude.toFixed(6)}
-              </ThemedText>
-            )}
-            {hazard.description ? (
-              <ThemedText type="default">{hazard.description}</ThemedText>
-            ) : (
-              <ThemedText type="default" themeColor="textSecondary">
-                No description provided.
-              </ThemedText>
-            )}
+              {hazard.room && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  📍 {hazard.room.name} ({hazard.room.category})
+                </ThemedText>
+              )}
+              {hazard.coordinate && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {hazard.coordinate.latitude.toFixed(6)}, {hazard.coordinate.longitude.toFixed(6)}
+                </ThemedText>
+              )}
+            </ScrollView>
             <Pressable onPress={onClose} style={[styles.detailClose, { backgroundColor: BU.red }]}>
               <ThemedText type="smallBold" style={styles.fabText}>
                 Close
@@ -327,6 +379,14 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.two,
     marginBottom: Spacing.six,
+    maxHeight: '80%',
+  },
+  detailScroll: { flexGrow: 0, maxHeight: 480 },
+  detailBody: { gap: Spacing.two },
+  detailPhoto: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: Spacing.three,
   },
   detailHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   detailDot: { width: 16, height: 16, borderRadius: 8 },

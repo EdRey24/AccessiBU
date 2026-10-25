@@ -25,6 +25,7 @@ type HazardBody = {
   status: 'open' | 'resolved';
   created_at: string;
   severity_score: number;
+  summary: string | null;
 };
 
 /** A stored text report as the backend returns it (POST /reports/text). */
@@ -58,6 +59,11 @@ const STORED_FROM_TYPE: Record<HazardType, StoredHazardType> = {
   'Lighting out': 'other',
   Other: 'other',
 };
+
+/** Maps a UI hazard type to the value stored on a report. */
+export function storedHazardType(type: HazardType): StoredHazardType {
+  return STORED_FROM_TYPE[type];
+}
 
 /** Maps the backend's stored enum back to a UI hazard type. */
 const TYPE_FROM_STORED: Record<StoredHazardType, HazardType> = {
@@ -100,6 +106,23 @@ export type SubmittedHazard = {
   createdAt: number;
   severityScore: number;
 };
+
+/** Loads the photo stored for a hazard, or null when it has none. */
+export async function loadHazardPhoto(hazardId: string): Promise<string | null> {
+  const response = await apiFetch(`/hazards/${hazardId}/photo`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
+  return readDataUrl(await response.blob());
+}
+
+function readDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
 
 /** Lists every open hazard, mapped into the app's Hazard shape. */
 export async function listHazards(): Promise<Hazard[]> {
@@ -155,7 +178,7 @@ function toHazard(row: HazardBody): Hazard {
     severity: pinSeverityFromScore(row.severity_score),
     severityScore: row.severity_score,
     hazardType: null,
-    description: 'Reported hazard',
+    description: row.summary?.trim() ? row.summary : 'Reported hazard',
     location: row.floor !== null ? 'inside' : 'outside',
     floor: row.floor,
     position: row.position,
@@ -208,6 +231,7 @@ function parseHazard(body: unknown): HazardBody | null {
     status: row.status,
     created_at: row.created_at,
     severity_score: row.severity_score,
+    summary: typeof row.summary === 'string' ? row.summary : null,
   };
 }
 
