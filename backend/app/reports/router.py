@@ -73,6 +73,9 @@ async def create_photo_report(
     latitude: Annotated[float | None, Form()] = None,
     longitude: Annotated[float | None, Form()] = None,
     hazard_id: Annotated[UUID | None, Form()] = None,
+    floor: Annotated[int | None, Form()] = None,
+    position_x: Annotated[float | None, Form()] = None,
+    position_y: Annotated[float | None, Form()] = None,
     member: Member = Depends(current_member),
     db: Session = Depends(get_db),
 ) -> PhotoReport:
@@ -83,6 +86,9 @@ async def create_photo_report(
         latitude: North-south coordinate of a new hazard.
         longitude: East-west coordinate of a new hazard.
         hazard_id: An open hazard to attach to.
+        floor: Floor the pin sits on. Omit for an outside hazard.
+        position_x: Normalized pin x on the floor plan.
+        position_y: Normalized pin y on the floor plan.
         member: The signed-in member.
         db: Open database session.
 
@@ -93,7 +99,14 @@ async def create_photo_report(
         HTTPException: The photo or the hazard was rejected, or storage
             is unavailable.
     """
-    place = _place(latitude, longitude, hazard_id)
+    place = _place(
+        latitude,
+        longitude,
+        hazard_id,
+        floor,
+        position_x,
+        position_y,
+    )
     raw = await image.read(MAX_IMAGE_BYTES + 1)
     try:
         return store_photo(db, member, raw, place)
@@ -147,6 +160,9 @@ def _place(
     latitude: float | None,
     longitude: float | None,
     hazard_id: UUID | None,
+    floor: int | None,
+    position_x: float | None,
+    position_y: float | None,
 ) -> ReportPlace:
     """Validates where a photo belongs.
 
@@ -154,6 +170,9 @@ def _place(
         latitude: North-south coordinate of a new hazard.
         longitude: East-west coordinate of a new hazard.
         hazard_id: An open hazard to attach to.
+        floor: Floor the pin sits on. Omit for an outside hazard.
+        position_x: Normalized pin x on the floor plan.
+        position_y: Normalized pin y on the floor plan.
 
     Returns:
         The validated place.
@@ -167,6 +186,9 @@ def _place(
                 "latitude": latitude,
                 "longitude": longitude,
                 "hazard_id": hazard_id,
+                "floor": floor,
+                "position_x": position_x,
+                "position_y": position_y,
             },
         )
     except ValidationError as error:

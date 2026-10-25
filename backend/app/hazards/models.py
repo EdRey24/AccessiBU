@@ -54,6 +54,15 @@ class Hazard(Base):
             "status IN ('open', 'resolved')",
             name="ck_hazards_status",
         ),
+        CheckConstraint(
+            "(position_x IS NULL) = (position_y IS NULL)",
+            name="ck_hazards_position_pair",
+        ),
+        CheckConstraint(
+            "(position_x IS NULL OR (position_x BETWEEN 0 AND 1)) "
+            "AND (position_y IS NULL OR (position_y BETWEEN 0 AND 1))",
+            name="ck_hazards_position_range",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -64,6 +73,12 @@ class Hazard(Base):
     )
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
+    # Floor the hazard sits on and the normalized pin position (0..1) on that
+    # floor's plan image, taken from the reporter's dropped pin. Nullable: an
+    # outside hazard, or one opened without a plan pin, has neither.
+    floor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    position_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    position_y: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[HazardStatus] = mapped_column(
         value_enum(HazardStatus, "ck_hazards_status"),
     )

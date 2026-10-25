@@ -1,8 +1,9 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { Hazard } from '@/constants/hazards';
 import { floorLabel, floorPlanImage } from '@/constants/hazards';
 import { BU, Spacing } from '@/constants/theme';
+import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
 import { useUserLocation } from '@/hooks/use-user-location';
 
@@ -24,6 +25,7 @@ type FloorPlanViewProps = {
  */
 export function FloorPlanView({ floor, hazards, onBack, onSelectHazard }: FloorPlanViewProps) {
   const theme = useTheme();
+  const { refresh, loading } = useHazards();
   const { planXY: userDot } = useUserLocation();
   const floorHazards = hazards.filter(
     (h) => h.location === 'inside' && h.floor === floor && h.position
@@ -52,7 +54,17 @@ export function FloorPlanView({ floor, hazards, onBack, onSelectHazard }: FloorP
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         maximumZoomScale={3}
-        minimumZoomScale={1}>
+        minimumZoomScale={1}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={() => {
+              void refresh();
+            }}
+            tintColor={BU.red}
+            colors={[BU.red]}
+          />
+        }>
         <View style={styles.planWrap}>
           <FloorPlan
             planImage={floorPlanImage(floor)}

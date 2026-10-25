@@ -132,12 +132,38 @@ class ReportPlace(BaseModel):
     Attributes:
         latitude: North-south coordinate of a new hazard.
         longitude: East-west coordinate of a new hazard.
+        floor: Floor value the pin sits on. Omit for an outside hazard.
+        position_x: Normalized pin x (0..1) on the floor plan.
+        position_y: Normalized pin y (0..1) on the floor plan.
         hazard_id: An open hazard to attach to. Omit to open one.
     """
 
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
+    floor: int | None = None
+    position_x: float | None = Field(default=None, ge=0, le=1)
+    position_y: float | None = Field(default=None, ge=0, le=1)
     hazard_id: UUID | None = None
+
+    @field_validator("position_y")
+    @classmethod
+    def _position_pair(cls, value: float | None, info) -> float | None:
+        """Requires x and y together: a point has both or neither.
+
+        Args:
+            value: The pin's y coordinate.
+            info: Validation context carrying the already-parsed fields.
+
+        Returns:
+            The y coordinate.
+
+        Raises:
+            ValueError: Only one of x / y was given.
+        """
+        x = info.data.get("position_x")
+        if (x is None) != (value is None):
+            raise ValueError("position_x and position_y must be set together.")
+        return value
 
     @model_validator(mode="after")
     def _place(self) -> Self:

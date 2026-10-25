@@ -57,6 +57,28 @@ def test_text_report_opens_a_hazard(client: TestClient) -> None:
     assert reports.json()[0]["category"] == 2
 
 
+def test_text_report_stores_the_pin(client: TestClient) -> None:
+    """A text submission keeps the floor and plan pin on the hazard."""
+    response = client.post(
+        "/reports/text",
+        json={
+            **PLACE,
+            "hazard_type": "spill",
+            "category": 2,
+            "description": "Wet floor by the stair",
+            "severity_score": 40,
+            "floor": 2,
+            "position_x": 0.25,
+            "position_y": 0.75,
+        },
+    )
+    assert response.status_code == 201
+    hazard = client.get(f"/hazards/{response.json()['hazard_id']}")
+    assert hazard.status_code == 200
+    assert hazard.json()["floor"] == 2
+    assert hazard.json()["position"] == {"x": 0.25, "y": 0.75}
+
+
 def test_text_report_requires_a_place(client: TestClient) -> None:
     """A new hazard without coordinates is rejected."""
     response = client.post(
