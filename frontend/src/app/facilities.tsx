@@ -22,10 +22,11 @@ import { useTheme } from '@/hooks/use-theme';
 import {
     deleteAdminHazard,
     listAdminHazards,
+    reopenAdminHazard,
     resolveAdminHazard,
     toPinHazard,
     type AdminHazard,
-    type StatusFilter,
+    type StatusFilter
 } from '@/services/admin';
 import { ApiError, failureMessage } from '@/services/api';
 import { resolveFloor2Location } from '@/services/floor-geo';
@@ -42,7 +43,7 @@ export default function FacilitiesScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { signOut } = useSession();
-  const { removeHazard } = useHazards();
+  const { removeHazard, refresh } = useHazards();
   const wide = width >= WIDE_BREAKPOINT;
 
   const [hazards, setHazards] = useState<AdminHazard[]>([]);
@@ -109,6 +110,22 @@ export default function FacilitiesScreen() {
       removeHazard(id);
     } catch (caught) {
       setActionError(failureMessage(caught, 'The hazard could not be resolved.'));
+      if (caught instanceof ApiError && caught.status === 404) void load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reopen = async (id: string) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const updated = await reopenAdminHazard(id);
+      setHazards((prev) => prev.map((h) => (h.id === id ? updated : h)));
+      // Resolving removed the pin from the shared map state; load it back.
+      void refresh();
+    } catch (caught) {
+      setActionError(failureMessage(caught, 'The hazard could not be reopened.'));
       if (caught instanceof ApiError && caught.status === 404) void load();
     } finally {
       setBusy(false);
@@ -209,6 +226,7 @@ export default function FacilitiesScreen() {
               actionError={actionError}
               onSelect={choose}
               onResolve={() => void resolve(selected.id)}
+              onReopen={() => void reopen(selected.id)}
               onAskDelete={() => setConfirmDelete(true)}
               onCancelDelete={() => setConfirmDelete(false)}
               onDelete={() => void remove(selected.id)}
@@ -330,6 +348,7 @@ function HazardDetail({
   actionError,
   onSelect,
   onResolve,
+  onReopen,
   onAskDelete,
   onCancelDelete,
   onDelete,
@@ -341,6 +360,7 @@ function HazardDetail({
   actionError: string | null;
   onSelect: (id: string) => void;
   onResolve: () => void;
+  onReopen: () => void;
   onAskDelete: () => void;
   onCancelDelete: () => void;
   onDelete: () => void;
@@ -455,12 +475,21 @@ function HazardDetail({
         </View>
       ) : (
         <View style={styles.actions}>
-          <ActionButton
-            label={resolved ? 'Resolved' : busy ? 'Resolving…' : 'Mark resolved'}
-            onPress={onResolve}
-            disabled={busy || resolved}
-            tone="primary"
-          />
+          {resolved ? (
+            <ActionButton
+              label={busy ? 'Reopening…' : 'Reopen'}
+              onPress={onReopen}
+              disabled={busy}
+              tone="neutral"
+            />
+          ) : (
+            <ActionButton
+              label={busy ? 'Resolving…' : 'Mark resolved'}
+              onPress={onResolve}
+              disabled={busy}
+              tone="primary"
+            />
+          )}
           <ActionButton label="Delete" onPress={onAskDelete} disabled={busy} tone="danger-outline" />
         </View>
       )}

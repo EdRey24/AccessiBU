@@ -1,8 +1,8 @@
 """The hazards table.
 
-Facilities resolve a hazard or delete it. A resolved hazard stays
-resolved. A delete only stamps deleted_at, so the hazard, its reports,
-and its photos can be recovered.
+Facilities resolve a hazard, reopen it if that was a mistake, or delete
+it. A new report never reopens a resolved hazard. A delete only stamps
+deleted_at, so the hazard, its reports, and its photos can be recovered.
 
 Severity is stored only on a hazard. A photo score will be copied from
 classification output, and a text submission will supply its score
@@ -41,12 +41,13 @@ class Hazard(Base):
         id: Primary key.
         latitude: North-south coordinate, from -90 through 90.
         longitude: East-west coordinate, from -180 through 180.
-        status: open or resolved. A resolved hazard stays resolved.
+        status: open or resolved. Reports cannot reopen a resolved
+            hazard. Only Facilities can, by reopening it.
         created_at: When the hazard was stored.
         severity_score: How much the condition interferes with passage,
             from 0 through 100. Higher means more blocked.
         resolved_at: When Facilities marked the hazard resolved. Null
-            while it is open.
+            while it is open, including after a reopen.
         resolved_by: The admin who resolved it. Null while it is open.
         deleted_at: When Facilities removed the hazard. A deleted
             hazard is hidden from every route but the row is kept.

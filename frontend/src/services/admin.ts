@@ -3,8 +3,8 @@
  * answers 403 to anyone else, so hiding the screen is only a convenience.
  *
  * `listAdminHazards` returns open and resolved hazards. A resolve keeps the
- * hazard and marks it done. A delete hides it from everyone; the backend
- * keeps the data, so it can be restored.
+ * hazard and marks it done, and a reopen undoes that. A delete hides it from
+ * everyone; the backend keeps the data, so it can be restored.
  */
 
 import type { Hazard, StoredHazardType } from '@/constants/hazards';
@@ -50,6 +50,15 @@ export async function listAdminHazards(status: StatusFilter = 'all'): Promise<Ad
 /** Marks a hazard resolved and returns the updated row. */
 export async function resolveAdminHazard(id: string): Promise<AdminHazard> {
   const response = await apiFetch(`/admin/hazards/${id}/resolve`, { method: 'POST' });
+  if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
+  const row = parseAdminHazard(await response.json());
+  if (!row) throw new ApiError(response.status, 'The hazard could not be read.');
+  return row;
+}
+
+/** Reopens a hazard that was resolved by mistake and returns the updated row. */
+export async function reopenAdminHazard(id: string): Promise<AdminHazard> {
+  const response = await apiFetch(`/admin/hazards/${id}/reopen`, { method: 'POST' });
   if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
   const row = parseAdminHazard(await response.json());
   if (!row) throw new ApiError(response.status, 'The hazard could not be read.');

@@ -66,6 +66,8 @@ def test_member_cannot_use_admin_routes(client: TestClient) -> None:
     assert client.get("/admin/hazards").status_code == 403
     resolved = client.post(f"/admin/hazards/{hazard_id}/resolve")
     assert resolved.status_code == 403
+    reopened = client.post(f"/admin/hazards/{hazard_id}/reopen")
+    assert reopened.status_code == 403
     assert client.delete(f"/admin/hazards/{hazard_id}").status_code == 403
     still_open = client.get(f"/hazards/{hazard_id}").json()
     assert still_open["status"] == "open"
@@ -136,6 +138,52 @@ def test_resolve_twice_keeps_the_first_time(admin: TestClient) -> None:
     assert second.json()["resolved_at"] == first["resolved_at"]
 
 
+def test_reopen_undoes_a_resolve(admin: TestClient) -> None:
+    """A reopen makes the hazard open again for everyone."""
+    hazard_id = _report(admin)
+    admin.post(f"/admin/hazards/{hazard_id}/resolve")
+    assert admin.get("/hazards").json() == []
+
+    response = admin.post(f"/admin/hazards/{hazard_id}/reopen")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "open"
+    assert body["resolved_at"] is None
+    assert [row["id"] for row in admin.get("/hazards").json()] == [hazard_id]
+    open_only = admin.get("/admin/hazards", params={"status": "open"}).json()
+    assert [row["id"] for row in open_only] == [hazard_id]
+
+    again = admin.post(f"/admin/hazards/{hazard_id}/resolve")
+    assert again.status_code == 200
+    assert again.json()["resolved_at"] is not None
+
+
+def test_reopen_an_open_hazard_changes_nothing(admin: TestClient) -> None:
+    """Reopening a hazard that is open is allowed and harmless."""
+    hazard_id = _report(admin)
+    response = admin.post(f"/admin/hazards/{hazard_id}/reopen")
+    assert response.status_code == 200
+    assert response.json()["status"] == "open"
+
+
+def test_reopened_hazard_takes_reports_again(admin: TestClient) -> None:
+    """After a reopen, members can attach reports again."""
+    hazard_id = _report(admin)
+    admin.post(f"/admin/hazards/{hazard_id}/resolve")
+    admin.post(f"/admin/hazards/{hazard_id}/reopen")
+    response = admin.post(
+        "/reports/text",
+        json={
+            "hazard_id": hazard_id,
+            "hazard_type": "elevator",
+            "category": 3,
+            "description": "Out again",
+            "severity_score": 90,
+        },
+    )
+    assert response.status_code == 201
+
+
 def test_resolved_hazard_takes_no_new_report(admin: TestClient) -> None:
     """A resolved hazard stays resolved."""
     hazard_id = _report(admin)
@@ -204,12 +252,15 @@ def test_missing_hazard_is_not_found(admin: TestClient) -> None:
     missing = uuid.uuid4()
     assert admin.post(f"/admin/hazards/{missing}/resolve").status_code == 404
     assert admin.delete(f"/admin/hazards/{missing}").status_code == 404
+    assert admin.post(f"/admin/hazards/{missing}/reopen").status_code == 404
 
     hazard_id = _report(admin)
     admin.delete(f"/admin/hazards/{hazard_id}")
     assert admin.delete(f"/admin/hazards/{hazard_id}").status_code == 404
     resolved = admin.post(f"/admin/hazards/{hazard_id}/resolve")
     assert resolved.status_code == 404
+    reopened = admin.post(f"/admin/hazards/{hazard_id}/reopen")
+    assert reopened.status_code == 404
 
 
 def test_bad_status_filter_is_rejected(admin: TestClient) -> None:

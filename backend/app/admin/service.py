@@ -70,6 +70,32 @@ def resolve_hazard(
     return admin_bodies(db, [hazard])[0]
 
 
+def reopen_hazard(db: Session, hazard_id: uuid.UUID) -> AdminHazard:
+    """Marks a resolved hazard open again, for a resolve made by mistake.
+
+    The resolver and time are cleared, so a later resolve records a new
+    one. Reopening a hazard that is already open changes nothing.
+
+    Args:
+        db: Open database session.
+        hazard_id: The hazard to reopen.
+
+    Returns:
+        The hazard after the change.
+
+    Raises:
+        RejectedReport: No hazard has that id, or it was deleted.
+    """
+    hazard = _require_live(db, hazard_id)
+    if hazard.status is not HazardStatus.OPEN:
+        hazard.status = HazardStatus.OPEN
+        hazard.resolved_at = None
+        hazard.resolved_by = None
+        db.commit()
+        db.refresh(hazard)
+    return admin_bodies(db, [hazard])[0]
+
+
 def delete_hazard(db: Session, hazard_id: uuid.UUID) -> None:
     """Hides a hazard from every route without removing any data.
 

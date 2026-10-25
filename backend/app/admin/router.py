@@ -60,6 +60,31 @@ def resolve_hazard(
         raise _rejected(error) from error
 
 
+@router.post("/{hazard_id}/reopen", response_model=AdminHazard)
+def reopen_hazard(
+    hazard_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _admin: Member = Depends(current_admin),
+) -> AdminHazard:
+    """Reopens a hazard that was resolved by mistake.
+
+    Args:
+        hazard_id: The hazard to reopen.
+        db: Open database session.
+        _admin: The signed-in admin.
+
+    Returns:
+        The reopened hazard.
+
+    Raises:
+        HTTPException: No hazard has that id.
+    """
+    try:
+        return service.reopen_hazard(db, hazard_id)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+
+
 @router.delete("/{hazard_id}", status_code=204)
 def delete_hazard(
     hazard_id: uuid.UUID,
