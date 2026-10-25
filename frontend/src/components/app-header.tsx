@@ -15,6 +15,10 @@ type AppHeaderProps = {
   activeCount: number;
   /** Shows the Facilities dashboard action. */
   isAdmin: boolean;
+  /** Unacknowledged high-severity alerts, shown as a badge on the bell. */
+  alertCount?: number;
+  /** Opens the alerts list. */
+  onAlerts?: () => void;
   onMyReports: () => void;
   onFacilities: () => void;
   onSignOut: () => void;
@@ -27,6 +31,8 @@ type AppHeaderProps = {
 export function AppHeader({
   activeCount,
   isAdmin,
+  alertCount = 0,
+  onAlerts,
   onMyReports,
   onFacilities,
   onSignOut,
@@ -64,11 +70,26 @@ export function AppHeader({
         {compact ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Open menu"
+            accessibilityLabel={
+              alertCount > 0
+                ? `Open menu, ${alertCount} new high-severity hazard${alertCount === 1 ? '' : 's'}`
+                : 'Open menu'
+            }
             accessibilityState={{ expanded: menuOpen }}
             onPress={() => setMenuOpen(true)}
-            style={[styles.button, styles.menuButton, { borderColor: theme.border }]}>
+            style={[
+              styles.button,
+              styles.menuButton,
+              { borderColor: alertCount > 0 ? BU.red : theme.border },
+            ]}>
             <ThemedText type="smallBold">☰ Menu</ThemedText>
+            {alertCount > 0 ? (
+              <View style={styles.badge}>
+                <ThemedText type="small" style={styles.badgeText}>
+                  {alertCount}
+                </ThemedText>
+              </View>
+            ) : null}
           </Pressable>
         ) : (
           <>
@@ -79,9 +100,21 @@ export function AppHeader({
             <HeaderButton label="Sign out" onPress={onSignOut} />
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Nearby alerts"
-              style={[styles.button, { borderColor: theme.border }]}>
+              accessibilityLabel={
+                alertCount > 0
+                  ? `Alerts, ${alertCount} new high-severity hazard${alertCount === 1 ? '' : 's'}`
+                  : 'Alerts'
+              }
+              onPress={onAlerts}
+              style={[styles.button, { borderColor: alertCount > 0 ? BU.red : theme.border }]}>
               <ThemedText type="small">🔔</ThemedText>
+              {alertCount > 0 ? (
+                <View style={styles.badge}>
+                  <ThemedText type="small" style={styles.badgeText}>
+                    {alertCount}
+                  </ThemedText>
+                </View>
+              ) : null}
             </Pressable>
           </>
         )}
@@ -105,6 +138,13 @@ export function AppHeader({
                 marginTop: insets.top + Spacing.five,
               },
             ]}>
+            {onAlerts ? (
+              <MenuItem
+                label={alertCount > 0 ? `🔔 Alerts (${alertCount})` : '🔔 Alerts'}
+                onPress={choose(onAlerts)}
+                accent={alertCount > 0}
+              />
+            ) : null}
             {isAdmin ? (
               <MenuItem label="Facilities dashboard" onPress={choose(onFacilities)} accent />
             ) : null}
@@ -188,6 +228,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   menuButton: { minHeight: 44, minWidth: 44 },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: BU.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'flex-end' },
   menu: {
     marginRight: Spacing.three,

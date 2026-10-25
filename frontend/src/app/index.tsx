@@ -7,11 +7,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppHeader } from '@/components/app-header';
 import { CampusMap } from '@/components/campus-map';
 import { FloorPlanView } from '@/components/floor-plan-view';
+import { HazardAlertToast } from '@/components/hazard-alert-toast';
 import { MyReportsModal } from '@/components/my-reports-modal';
+import { NotificationsSheet } from '@/components/notifications-sheet';
 import { ReportHazardModal } from '@/components/report-hazard-modal';
 import { ThemedText } from '@/components/themed-text';
 import { CDS_FLOORS, floorLabel, storedHazardLabel, type Hazard } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
+import { useHazardAlerts } from '@/hooks/use-hazard-alerts';
 import { useHazards } from '@/hooks/use-hazards';
 import { useSession } from '@/hooks/use-session';
 import { useTheme } from '@/hooks/use-theme';
@@ -27,11 +30,16 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { member, signOut } = useSession();
   const { hazards, refresh, loading, error } = useHazards();
+  const { alerts, unseen, unseenCount, markAllSeen } = useHazardAlerts();
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [reportOpen, setReportOpen] = useState(false);
   const [myReportsOpen, setMyReportsOpen] = useState(false);
   const [floorPickerOpen, setFloorPickerOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [detail, setDetail] = useState<Hazard | null>(null);
+  // Snapshot of what was new when the sheet opened, so the "New" tags survive
+  // acknowledging them on open.
+  const [alertNewIds, setAlertNewIds] = useState<Set<string>>(new Set());
 
   const insideCount = hazards.filter((h) => h.location === 'inside').length;
 
@@ -41,6 +49,12 @@ export default function HomeScreen() {
       <AppHeader
         activeCount={hazards.length}
         isAdmin={member?.role === 'admin'}
+        alertCount={unseenCount}
+        onAlerts={() => {
+          setAlertNewIds(new Set(unseen.map((h) => h.id)));
+          setAlertsOpen(true);
+          markAllSeen();
+        }}
         onMyReports={() => setMyReportsOpen(true)}
         onFacilities={() => router.push('/facilities')}
         onSignOut={() => {
@@ -132,6 +146,29 @@ export default function HomeScreen() {
         }}
         hazards={hazards}
         current={screen.kind === 'floor' ? screen.floor : null}
+      />
+
+      {/* Auto-appearing banner for newly reported high-severity hazards */}
+      <HazardAlertToast
+        alerts={unseen}
+        onPress={(h) => {
+          markAllSeen();
+          if (h.floor !== null) setScreen({ kind: 'floor', floor: h.floor });
+          setDetail(h);
+        }}
+      />
+
+      {/* High-severity alerts */}
+      <NotificationsSheet
+        visible={alertsOpen}
+        onClose={() => setAlertsOpen(false)}
+        alerts={alerts}
+        newIds={alertNewIds}
+        onSelect={(h) => {
+          setAlertsOpen(false);
+          if (h.floor !== null) setScreen({ kind: 'floor', floor: h.floor });
+          setDetail(h);
+        }}
       />
 
       {/* Hazard detail */}
@@ -315,6 +352,7 @@ function HazardDetailSheet({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   main: { flex: 1 },
   bottomBar: {
     flexDirection: 'row',
