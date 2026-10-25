@@ -10,13 +10,22 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Response,
+    UploadFile,
+)
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.members.deps import current_member
 from app.members.models import Member
+from app.reports import own
 from app.reports.classify import (
     NOT_A_HAZARD,
     ClassificationError,
@@ -32,7 +41,9 @@ from app.reports.preview import (
 )
 from app.reports.schemas import (
     Classification,
+    OwnReport,
     PhotoReport,
+    ReportEdit,
     ReportPlace,
     TextReport,
     TextReportSubmit,
@@ -164,6 +175,138 @@ async def create_photo_report(
             status_code=502,
             detail="Storage is unavailable.",
         ) from error
+
+
+@router.get("/mine", response_model=list[OwnReport])
+def list_my_reports(
+    member: Member = Depends(current_member),
+    db: Session = Depends(get_db),
+) -> list[OwnReport]:
+    """Lists the signed-in member's own reports, newest first.
+
+    Args:
+        member: The signed-in member.
+        db: Open database session.
+
+    Returns:
+        Only reports this member submitted.
+    """
+    return own.list_own(db, member)
+
+
+@router.get("/{report_id}/photo")
+def read_my_report_photo(
+    report_id: UUID,
+    member: Member = Depends(current_member),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Returns the photo of one of the member's own reports.
+
+    Args:
+        report_id: The report whose photo to load.
+        member: The signed-in member.
+        db: Open database session.
+
+    Returns:
+        The image bytes.
+
+    Raises:
+        HTTPException: The report is not the member's or has no photo.
+    """
+    try:
+        body, media_type = own.photo_of(db, member, report_id)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+    return Response(content=body, media_type=media_type)
+
+
+@router.patch("/{report_id}", response_model=OwnReport)
+def edit_my_report(
+    report_id: UUID,
+    edit: ReportEdit,
+    member: Member = Depends(current_member),
+    db: Session = Depends(get_db),
+) -> OwnReport:
+    """Edits one of the member's own reports.
+
+    Args:
+        report_id: The report to change.
+        edit: The fields to change.
+        member: The signed-in member.
+        db: Open database session.
+
+    Returns:
+        The report after the change.
+
+    Raises:
+        HTTPException: The report is not the member's, its hazard is
+            resolved, or the location is shared with other reports.
+    """
+    try:
+        return own.edit_own(db, member, report_id, edit)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+
+
+@router.put("/{report_id}/photo", response_model=OwnReport)
+async def replace_my_report_photo(
+    report_id: UUID,
+    image: Annotated[UploadFile, File()],
+    member: Member = Depends(current_member),
+    db: Session = Depends(get_db),
+) -> OwnReport:
+    """Replaces the photo on one of the member's own photo reports.
+
+    Args:
+        report_id: The photo report to change.
+        image: The new photo.
+        member: The signed-in member.
+        db: Open database session.
+
+    Returns:
+        The report after the change.
+
+    Raises:
+        HTTPException: The report is not the member's, the photo was
+            rejected, or storage is unavailable.
+    """
+    raw = await image.read(MAX_IMAGE_BYTES + 1)
+    try:
+        return own.replace_photo(db, member, report_id, raw)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+    except StorageError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Storage is unavailable.",
+        ) from error
+
+
+@router.delete("/{report_id}", status_code=204)
+def delete_my_report(
+    report_id: UUID,
+    member: Member = Depends(current_member),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Deletes one of the member's own reports.
+
+    Args:
+        report_id: The report to delete.
+        member: The signed-in member.
+        db: Open database session.
+
+    Returns:
+        An empty 204 response.
+
+    Raises:
+        HTTPException: The report is not the member's, or its hazard is
+            resolved.
+    """
+    try:
+        own.delete_own(db, member, report_id)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+    return Response(status_code=204)
 
 
 @classify_router.post("/classify", response_model=PreviewClassification)

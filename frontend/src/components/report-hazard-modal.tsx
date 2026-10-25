@@ -8,6 +8,7 @@ import {
     ScrollView,
     StyleSheet,
     TextInput,
+    useWindowDimensions,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +18,6 @@ import {
     CDS_FLOORS,
     floorLabel,
     floorPlanImage,
-    gpsToPlanXY,
     HAZARD_TYPES,
     planXYToGps,
     type Location as HazardLocation,
@@ -39,8 +39,11 @@ import { submitPhotoReport } from '@/services/reports';
 
 import { CameraCapture } from './camera-capture';
 import { Dropdown } from './dropdown';
-import { FloorPlan } from './floor-plan';
 import { ThemedText } from './themed-text';
+import { ZoomableFloorPlan } from './zoomable-floor-plan';
+
+/** From this width up the report sheet is a centered card, not full width. */
+const WIDE_SCREEN = 768;
 
 type ReportHazardModalProps = {
   visible: boolean;
@@ -84,6 +87,8 @@ function resolvePin(
 export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const wide = screenWidth >= WIDE_SCREEN;
   const { addHazard } = useHazards();
 
   const [method, setMethod] = useState<ReportMethod>('photo');
@@ -119,10 +124,6 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   // Start with a center pin so the user just drags it to the exact spot.
   const [position, setPosition] = useState<{ x: number; y: number } | null>({ x: 0.5, y: 0.5 });
 
-  // "You are here" dot: project the user's GPS onto the floor plan (approximate
-  // indoors, so the user still drags the pin to the exact spot).
-  const userDot = coords ? gpsToPlanXY(coords) : null;
-
   const clearClassification = () => {
     classificationId.current += 1;
     classifiedPhoto.current = null;
@@ -156,7 +157,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     onClose();
   };
 
-  // Keeps coords so the floor plan can show an approximate "you are here" dot.
+  // Keeps coords for the spatial context sent with the photo.
   const detectBuilding = async (): Promise<Coords | null> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -316,10 +317,11 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, wide && styles.backdropWide]}>
         <View
           style={[
             styles.sheet,
+            wide && styles.sheetWide,
             { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.four },
           ]}>
           <View style={styles.header}>
@@ -452,11 +454,10 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                 Drag the pin to the exact spot
               </ThemedText>
             </View>
-            <FloorPlan
+            <ZoomableFloorPlan
               planImage={floorPlanImage(floor)}
               floor={floor}
               draftPin={position}
-              userDot={userDot}
               onPlace={setPosition}
               showFeatures
               caption={floorLabel(floor)}
@@ -619,13 +620,26 @@ function HazardTypeDropdown({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  backdropWide: { justifyContent: 'center', padding: Spacing.four },
   sheet: {
+    width: '100%',
+    maxWidth: 720,
     borderTopLeftRadius: Spacing.four,
     borderTopRightRadius: Spacing.four,
     maxHeight: '92%',
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
+  },
+  sheetWide: {
+    borderRadius: Spacing.four,
+    maxHeight: '100%',
+    paddingBottom: Spacing.four,
   },
   header: {
     flexDirection: 'row',
@@ -657,7 +671,7 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
     marginTop: -Spacing.two,
   },
-  preview: { width: '100%', aspectRatio: 16 / 9, borderRadius: Spacing.three },
+  preview: { width: '100%', aspectRatio: 16 / 9, maxHeight: 280, borderRadius: Spacing.three },
   submitError: { color: BU.red, marginBottom: Spacing.two },
   banner: {
     flexDirection: 'row',

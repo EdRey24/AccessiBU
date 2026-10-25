@@ -7,3 +7,16 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/*
+ * Phone browsers: 100% height is the tall layout viewport, measured as if the
+ * address bar were hidden. That pushes the bottom bar and the Report Hazard
+ * button below the visible screen. 100dvh follows the visible area instead.
+ */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh !important;
+  }
+}

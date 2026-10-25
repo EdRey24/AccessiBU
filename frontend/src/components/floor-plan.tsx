@@ -1,23 +1,24 @@
 import { Image } from 'expo-image';
 import { useMemo, useRef, useState } from 'react';
 import {
-    GestureResponderEvent,
-    LayoutRectangle,
-    PanResponder,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  GestureResponderEvent,
+  LayoutRectangle,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 import type { Hazard } from '@/constants/hazards';
 import { floorFeatures, floorPlanSize } from '@/constants/hazards';
+import { markerDims } from '@/constants/plan-marker';
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type Pos = { x: number; y: number };
 
-type FloorPlanProps = {
+export type FloorPlanProps = {
   planImage?: number;
   floor?: number;
   pins?: Hazard[];
@@ -25,19 +26,32 @@ type FloorPlanProps = {
   onPlace?: (pos: Pos) => void;
   onPinPress?: (hazard: Hazard) => void;
   showFeatures?: boolean;
-  /** "You are here" dot from GPS, normalized (0-1). Null = unknown. */
-  userDot?: Pos | null;
   caption?: string;
   /** Pin to ring so it stands out from the others. */
   selectedId?: string | null;
+  /**
+   * How far the plan is zoomed (1 = fitted). Pins get smaller as it grows so
+   * the exact spot stays visible.
+   */
+  zoom?: number;
+  /**
+   * Place the pin with a tap instead of a drag. Used while zoomed, when a drag
+   * has to scroll the plan instead.
+   */
+  tapToPlace?: boolean;
 };
 
-const PIN = 26;
+/** Width divided by height of the plan drawn for a floor. */
+export function planAspect(floor: number): number {
+  const size = floorPlanSize(floor);
+  return size.width / size.height;
+}
 
 /**
  * Native floor plan. A PanResponder handles both tap-to-place and drag, using
  * locationX/locationY against the measured layout so the pin lands exactly
- * under the finger and can be dragged to the precise spot.
+ * under the finger and can be dragged to the precise spot. When `tapToPlace`
+ * is set only a tap places the pin, so a drag is free to scroll a zoomed plan.
  */
 export function FloorPlan({
   planImage,
@@ -47,9 +61,10 @@ export function FloorPlan({
   onPlace,
   onPinPress,
   showFeatures,
-  userDot = null,
   caption,
   selectedId = null,
+  zoom = 1,
+  tapToPlace = false,
 }: FloorPlanProps) {
   const theme = useTheme();
   const [layout, setLayout] = useState<LayoutRectangle | null>(null);
@@ -58,6 +73,7 @@ export function FloorPlan({
 
   const w = layout?.width ?? 0;
   const h = layout?.height ?? 0;
+  const dims = markerDims(w, zoom);
 
   const place = (e: GestureResponderEvent) => {
     const l = layoutRef.current;
@@ -80,19 +96,30 @@ export function FloorPlan({
     [placeable, onPlace]
   );
 
-  const px = (pos: Pos) => ({ left: pos.x * w - PIN / 2, top: pos.y * h - PIN / 2 });
+  const px = (pos: Pos) => ({
+    left: pos.x * w - dims.pin / 2,
+    top: pos.y * h - dims.pin / 2,
+  });
+  const pinBox = { width: dims.pin, height: dims.pin };
+  const pinDot = {
+    width: dims.pin,
+    height: dims.pin,
+    borderRadius: dims.pin / 2,
+    borderWidth: dims.border,
+  };
+  const pinInner = { width: dims.inner, height: dims.inner, borderRadius: dims.inner / 2 };
 
-  return (
-    <View
-      {...(placeable ? responder.panHandlers : {})}
-      onLayout={(e) => {
-        layoutRef.current = e.nativeEvent.layout;
-        setLayout(e.nativeEvent.layout);
-      }}
-      style={[
-        styles.plan,
-        { aspectRatio: floorPlanSize(floor).width / floorPlanSize(floor).height, borderColor: theme.border },
-      ]}>
+  const onLayout = (e: { nativeEvent: { layout: LayoutRectangle } }) => {
+    layoutRef.current = e.nativeEvent.layout;
+    setLayout(e.nativeEvent.layout);
+  };
+  const planStyle = [
+    styles.plan,
+    { aspectRatio: planAspect(floor), borderColor: theme.border },
+  ];
+
+  const body = (
+    <>
       {planImage ? (
         <Image
           source={planImage}
@@ -130,29 +157,35 @@ export function FloorPlan({
                 key={hz.id}
                 accessibilityRole="button"
                 accessibilityLabel={`${hz.type}, severity ${hz.severity}`}
+                hitSlop={8}
                 onPress={() => onPinPress?.(hz)}
-                style={[styles.pin, px(hz.position!), hz.id === selectedId && styles.pinSelected]}>
-                {hz.id === selectedId && <View pointerEvents="none" style={styles.selectedRing} />}
-                <View style={[styles.pinDot, { backgroundColor: severityColor(hz.severity) }]}>
-                  <View style={styles.pinInner} />
+                style={[styles.pin, pinBox, px(hz.position!), hz.id === selectedId && styles.pinSelected]}>
+                {hz.id === selectedId && (
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.selectedRing,
+                      { width: dims.ring, height: dims.ring, borderRadius: dims.ring / 2 },
+                    ]}
+                  />
+                )}
+                <View style={[styles.pinDot, pinDot, { backgroundColor: severityColor(hz.severity) }]}>
+                  <View style={[styles.pinInner, pinInner]} />
                 </View>
               </Pressable>
             ))}
 
-          {/* Live "you are here" dot (GPS, approximate) */}
-          {userDot && (
-            <View pointerEvents="none" style={[styles.userWrap, { left: userDot.x * w - 8, top: userDot.y * h - 8 }]}>
-              <View style={styles.userHalo} />
-              <View style={styles.userDot} />
-            </View>
-          )}
-
           {/* Draft pin */}
           {draftPin && (
-            <View pointerEvents="none" style={[styles.pin, px(draftPin)]}>
-              <View style={styles.draftHalo} />
-              <View style={[styles.pinDot, { backgroundColor: BU.red }]}>
-                <View style={styles.pinInner} />
+            <View pointerEvents="none" style={[styles.pin, pinBox, px(draftPin)]}>
+              <View
+                style={[
+                  styles.draftHalo,
+                  { width: dims.halo, height: dims.halo, borderRadius: dims.halo / 2 },
+                ]}
+              />
+              <View style={[styles.pinDot, pinDot, { backgroundColor: BU.red }]}>
+                <View style={[styles.pinInner, pinInner]} />
               </View>
             </View>
           )}
@@ -166,6 +199,25 @@ export function FloorPlan({
           </View>
         </View>
       )}
+    </>
+  );
+
+  if (placeable && tapToPlace) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Floor plan. Tap a spot to place the pin."
+        onPress={place}
+        onLayout={onLayout}
+        style={planStyle}>
+        {body}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View {...(placeable ? responder.panHandlers : {})} onLayout={onLayout} style={planStyle}>
+      {body}
     </View>
   );
 }
@@ -180,16 +232,10 @@ const styles = StyleSheet.create({
   },
   pin: {
     position: 'absolute',
-    width: PIN,
-    height: PIN,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pinDot: {
-    width: PIN,
-    height: PIN,
-    borderRadius: PIN / 2,
-    borderWidth: 3,
     borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
@@ -199,40 +245,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 5,
   },
-  pinInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
+  pinInner: { backgroundColor: '#fff' },
   pinSelected: { zIndex: 10 },
   selectedRing: {
     position: 'absolute',
-    width: PIN + 16,
-    height: PIN + 16,
-    borderRadius: (PIN + 16) / 2,
     borderWidth: 3,
     borderColor: '#111',
   },
   draftHalo: {
     position: 'absolute',
-    width: PIN * 2,
-    height: PIN * 2,
-    borderRadius: PIN,
     backgroundColor: BU.red,
     opacity: 0.18,
-  },
-  userWrap: { position: 'absolute', width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
-  userHalo: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#2F7CF6',
-    opacity: 0.22,
-  },
-  userDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#2F7CF6',
-    borderWidth: 2,
-    borderColor: '#fff',
   },
   feature: { position: 'absolute', width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },
   featureIcon: { fontSize: 16 },

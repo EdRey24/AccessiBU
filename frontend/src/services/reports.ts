@@ -9,6 +9,7 @@
 
 import type { StoredHazardType } from '@/constants/hazards';
 import { ApiError, apiFetch, apiUrl, errorDetail } from '@/services/api';
+import { readDataUrl } from '@/services/hazards';
 import { appendPhoto } from '@/services/photo-form';
 
 const STORED_HAZARD_TYPES: readonly StoredHazardType[] = [
@@ -141,3 +142,135 @@ function parsePhotoReport(body: unknown): PhotoReportBody | null {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// A member's own reports. The backend only ever returns, changes, or deletes
+// reports that belong to the signed-in member.
+// ---------------------------------------------------------------------------
+
+/** One of the signed-in member's reports, with the hazard facts they may edit. */
+export type OwnReport = {
+  id: string;
+  kind: 'photo' | 'text';
+  hazardId: string;
+  createdAt: number;
+  hazardType: StoredHazardType;
+  /** What the member wrote, or the photo summary. */
+  text: string;
+  hasPhoto: boolean;
+  hazardStatus: 'open' | 'resolved';
+  floor: number | null;
+  position: { x: number; y: number } | null;
+  /** False once Facilities resolved the hazard. */
+  editable: boolean;
+  /** False when other members also reported this hazard. */
+  canEditLocation: boolean;
+};
+
+/** Fields a member can change on their own report. Omitted fields stay as they are. */
+export type ReportChanges = {
+  description?: string;
+  hazardType?: StoredHazardType;
+  location?: {
+    latitude: number;
+    longitude: number;
+    floor: number | null;
+    position: { x: number; y: number } | null;
+  };
+};
+
+/** Lists the signed-in member's own reports, newest first. */
+export async function listMyReports(): Promise<OwnReport[]> {
+  const response = await apiFetch('/reports/mine');
+  if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
+  const body: unknown = await response.json();
+  if (!Array.isArray(body)) throw new ApiError(response.status, 'Your reports could not be read.');
+  return body.map(parseOwnReport).filter((row): row is OwnReport => row !== null);
+}
+
+/** Saves changes to one of the member's own reports. */
+export async function updateMyReport(id: string, changes: ReportChanges): Promise<OwnReport> {
+  const payload: Record<string, unknown> = {};
+  if (changes.description !== undefined) payload.description = changes.description;
+  if (changes.hazardType !== undefined) payload.hazard_type = changes.hazardType;
+  if (changes.location) {
+    payload.location = {
+      latitude: changes.location.latitude,
+      longitude: changes.location.longitude,
+      floor: changes.location.floor,
+      position_x: changes.location.position?.x ?? null,
+      position_y: changes.location.position?.y ?? null,
+    };
+  }
+  const response = await apiFetch(`/reports/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return readOwnReport(response);
+}
+
+/** Replaces the photo on one of the member's own photo reports. */
+export async function replaceMyReportPhoto(id: string, uri: string): Promise<OwnReport> {
+  const form = new FormData();
+  await appendPhoto(form, uri);
+  const response = await apiFetch(`/reports/${id}/photo`, { method: 'PUT', body: form });
+  return readOwnReport(response);
+}
+
+/** Deletes one of the member's own reports. */
+export async function deleteMyReport(id: string): Promise<void> {
+  const response = await apiFetch(`/reports/${id}`, { method: 'DELETE' });
+  if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
+}
+
+/** Loads the photo of one of the member's own reports as a data URL, or null. */
+export async function loadMyReportPhoto(id: string): Promise<string | null> {
+  const response = await apiFetch(`/reports/${id}/photo`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
+  return readDataUrl(await response.blob());
+}
+
+async function readOwnReport(response: Response): Promise<OwnReport> {
+  if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
+  const report = parseOwnReport(await response.json());
+  if (!report) throw new ApiError(response.status, 'The report could not be read.');
+  return report;
+}
+
+function parseOwnReport(body: unknown): OwnReport | null {
+  if (!body || typeof body !== 'object') return null;
+  const row = body as Record<string, unknown>;
+  if (
+    typeof row.id !== 'string' ||
+    (row.kind !== 'photo' && row.kind !== 'text') ||
+    typeof row.hazard_id !== 'string' ||
+    typeof row.hazard_type !== 'string' ||
+    !STORED_HAZARD_TYPES.includes(row.hazard_type as StoredHazardType) ||
+    typeof row.text !== 'string' ||
+    (row.hazard_status !== 'open' && row.hazard_status !== 'resolved')
+  ) {
+    return null;
+  }
+  let position: { x: number; y: number } | null = null;
+  if (row.position && typeof row.position === 'object') {
+    const p = row.position as Record<string, unknown>;
+    if (typeof p.x === 'number' && typeof p.y === 'number') position = { x: p.x, y: p.y };
+  }
+  const createdAt = typeof row.created_at === 'string' ? Date.parse(row.created_at) : NaN;
+  return {
+    id: row.id,
+    kind: row.kind,
+    hazardId: row.hazard_id,
+    createdAt: Number.isNaN(createdAt) ? Date.now() : createdAt,
+    hazardType: row.hazard_type as StoredHazardType,
+    text: row.text,
+    hasPhoto: row.has_photo === true,
+    hazardStatus: row.hazard_status,
+    floor: typeof row.floor === 'number' ? row.floor : null,
+    position,
+    editable: row.editable === true,
+    canEditLocation: row.can_edit_location === true,
+  };
+}

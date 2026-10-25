@@ -87,6 +87,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
   },
   sheet: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
     borderRadius: Spacing.three,
     maxHeight: '60%',
     overflow: 'hidden',

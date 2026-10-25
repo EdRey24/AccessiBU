@@ -1,32 +1,39 @@
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { Hazard } from '@/constants/hazards';
 import { floorLabel, floorPlanImage } from '@/constants/hazards';
 import { BU, Spacing } from '@/constants/theme';
-import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
-import { useUserLocation } from '@/hooks/use-user-location';
 
-import { FloorPlan } from './floor-plan';
 import { ThemedText } from './themed-text';
+import { ZoomableFloorPlan } from './zoomable-floor-plan';
 
 type FloorPlanViewProps = {
   floor: number;
   hazards: Hazard[];
   onBack: () => void;
+  /** Opens the floor picker, so the member can jump to another floor. */
+  onChangeFloor: () => void;
   onSelectHazard?: (hazard: Hazard) => void;
 };
 
 /**
  * Read-only 2D floor plan drill-down. Renders the real KPMB plan with every
  * hazard on this floor pinned at the reporter's exact normalized position.
- * A fixed top bar always shows a clear way back to the map; the plan is
- * centered and size-capped so it never overflows or hides the controls.
+ *
+ * The plan fills all the space under the top bar and opens zoomed in, so on a
+ * narrow phone it is large enough to read instead of a thin strip. Pinch,
+ * scroll, or double-tap to zoom, and drag to move around. Tapping the floor
+ * name switches floors without going back to the map.
  */
-export function FloorPlanView({ floor, hazards, onBack, onSelectHazard }: FloorPlanViewProps) {
+export function FloorPlanView({
+  floor,
+  hazards,
+  onBack,
+  onChangeFloor,
+  onSelectHazard,
+}: FloorPlanViewProps) {
   const theme = useTheme();
-  const { refresh, loading } = useHazards();
-  const { planXY: userDot } = useUserLocation();
   const floorHazards = hazards.filter(
     (h) => h.location === 'inside' && h.floor === floor && h.position
   );
@@ -44,43 +51,28 @@ export function FloorPlanView({ floor, hazards, onBack, onSelectHazard }: FloorP
             ‹ Back to map
           </ThemedText>
         </Pressable>
-        <ThemedText type="smallBold">{floorLabel(floor)}</ThemedText>
+        <Pressable
+          onPress={onChangeFloor}
+          accessibilityRole="button"
+          accessibilityLabel={`${floorLabel(floor)}. Change floor.`}
+          style={[styles.floorBtn, { borderColor: theme.border }]}>
+          <ThemedText type="smallBold">{floorLabel(floor)} ▾</ThemedText>
+        </Pressable>
         <ThemedText type="small" themeColor="textSecondary">
           {floorHazards.length} {floorHazards.length === 1 ? 'hazard' : 'hazards'}
         </ThemedText>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        maximumZoomScale={3}
-        minimumZoomScale={1}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={() => {
-              void refresh();
-            }}
-            tintColor={BU.red}
-            colors={[BU.red]}
-          />
-        }>
-        <View style={styles.planWrap}>
-          <FloorPlan
-            planImage={floorPlanImage(floor)}
-            floor={floor}
-            pins={floorHazards}
-            userDot={userDot}
-            onPinPress={onSelectHazard}
-            caption={floorLabel(floor)}
-          />
-        </View>
-        {floorHazards.length === 0 && (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-            No hazards pinned on this floor yet.
-          </ThemedText>
-        )}
-      </ScrollView>
+      <View style={styles.planArea}>
+        <ZoomableFloorPlan
+          fill
+          planImage={floorPlanImage(floor)}
+          floor={floor}
+          pins={floorHazards}
+          onPinPress={onSelectHazard}
+          caption={floorLabel(floor)}
+        />
+      </View>
     </View>
   );
 }
@@ -91,29 +83,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     borderBottomWidth: 1,
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
   backBtn: {
+    minHeight: 40,
+    justifyContent: 'center',
     borderRadius: Spacing.five,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
   backText: { color: '#fff' },
-  scroll: { flex: 1 },
-  scrollContent: {
-    padding: Spacing.three,
-    alignItems: 'center',
+  floorBtn: {
+    minHeight: 40,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: Spacing.five,
+    paddingHorizontal: Spacing.three,
   },
-  planWrap: {
-    width: '100%',
-    // Cap the plan so it stays readable and centered on very wide monitors,
-    // but allow it to grow large — the wide Floor 2 plan (≈2.4:1) looks cramped
-    // at a small cap, so give it generous room.
-    maxWidth: 1000,
-    alignSelf: 'center',
-  },
-  empty: { textAlign: 'center', marginTop: Spacing.three },
+  planArea: { flex: 1, padding: Spacing.two },
 });
