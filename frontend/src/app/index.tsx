@@ -6,10 +6,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CampusMap } from '@/components/campus-map';
 import { FloorPlanView } from '@/components/floor-plan-view';
+import { HazardAlertToast } from '@/components/hazard-alert-toast';
+import { NotificationsSheet } from '@/components/notifications-sheet';
 import { ReportHazardModal } from '@/components/report-hazard-modal';
 import { ThemedText } from '@/components/themed-text';
 import { CDS_FLOORS, floorLabel, storedHazardLabel, type Hazard } from '@/constants/hazards';
 import { BU, severityColor, Spacing } from '@/constants/theme';
+import { useHazardAlerts } from '@/hooks/use-hazard-alerts';
 import { useHazards } from '@/hooks/use-hazards';
 import { useSession } from '@/hooks/use-session';
 import { useTheme } from '@/hooks/use-theme';
@@ -24,10 +27,15 @@ export default function HomeScreen() {
   const router = useRouter();
   const { member, signOut } = useSession();
   const { hazards, refresh, loading, error } = useHazards();
+  const { alerts, unseen, unseenCount, markAllSeen } = useHazardAlerts();
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [reportOpen, setReportOpen] = useState(false);
   const [floorPickerOpen, setFloorPickerOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [detail, setDetail] = useState<Hazard | null>(null);
+  // Snapshot of what was new when the sheet opened, so the "New" tags survive
+  // acknowledging them on open.
+  const [alertNewIds, setAlertNewIds] = useState<Set<string>>(new Set());
 
   const insideCount = hazards.filter((h) => h.location === 'inside').length;
 
@@ -68,10 +76,26 @@ export default function HomeScreen() {
             <ThemedText type="small">Sign out</ThemedText>
           </Pressable>
           <Pressable
-            style={[styles.alertsBtn, { borderColor: theme.border }]}
+            style={[styles.alertsBtn, { borderColor: unseenCount > 0 ? BU.red : theme.border }]}
             accessibilityRole="button"
-            accessibilityLabel="Nearby alerts">
+            accessibilityLabel={
+              unseenCount > 0
+                ? `Alerts, ${unseenCount} new high-severity hazard${unseenCount === 1 ? '' : 's'}`
+                : 'Alerts'
+            }
+            onPress={() => {
+              setAlertNewIds(new Set(unseen.map((h) => h.id)));
+              setAlertsOpen(true);
+              markAllSeen();
+            }}>
             <ThemedText type="small">🔔</ThemedText>
+            {unseenCount > 0 ? (
+              <View style={styles.badge}>
+                <ThemedText type="small" style={styles.badgeText}>
+                  {unseenCount}
+                </ThemedText>
+              </View>
+            ) : null}
           </Pressable>
         </View>
       </View>
@@ -151,6 +175,29 @@ export default function HomeScreen() {
           setScreen({ kind: 'floor', floor });
         }}
         hazards={hazards}
+      />
+
+      {/* Auto-appearing banner for newly reported high-severity hazards */}
+      <HazardAlertToast
+        alerts={unseen}
+        onPress={(h) => {
+          markAllSeen();
+          if (h.floor !== null) setScreen({ kind: 'floor', floor: h.floor });
+          setDetail(h);
+        }}
+      />
+
+      {/* High-severity alerts */}
+      <NotificationsSheet
+        visible={alertsOpen}
+        onClose={() => setAlertsOpen(false)}
+        alerts={alerts}
+        newIds={alertNewIds}
+        onSelect={(h) => {
+          setAlertsOpen(false);
+          if (h.floor !== null) setScreen({ kind: 'floor', floor: h.floor });
+          setDetail(h);
+        }}
       />
 
       {/* Hazard detail */}
@@ -331,6 +378,19 @@ const styles = StyleSheet.create({
   },
   brand: { color: BU.red, fontSize: 28, lineHeight: 32, fontWeight: '800' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: BU.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   alertsBtn: {
     borderWidth: 1,
     borderRadius: Spacing.five,
