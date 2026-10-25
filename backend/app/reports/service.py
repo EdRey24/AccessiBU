@@ -279,6 +279,9 @@ def _hazard(db: Session, place: ReportPlace, severity_score: int) -> Hazard:
     hazard = Hazard(
         latitude=place.latitude,
         longitude=place.longitude,
+        floor=place.floor,
+        position_x=place.position_x,
+        position_y=place.position_y,
         status=HazardStatus.OPEN,
         severity_score=severity_score,
     )

@@ -1,99 +1,210 @@
-"""Routes that store hazard reports.
+"""Report submission routes.
 
-A text submission opens a hazard at a coordinate, or attaches to an
-open one, and stores the member's description. The severity it carries
-is written onto the hazard. Photo submissions are not served here yet.
+A text report is JSON. A photo report is one image plus the place it
+belongs. The vision call fills the photo's hazard type, category,
+summary, and severity. POST /classify previews that call without
+storing a report.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.hazards.models import Hazard as HazardRow
-from app.hazards.models import HazardStatus
 from app.members.deps import current_member
-from app.members.models import Member as MemberRow
-from app.reports.models import Report as ReportRow
-from app.reports.models import ReportKind
-from app.reports.schemas import TextReport, TextReportSubmit
+from app.members.models import Member
+from app.reports.classify import ClassificationError, classify
+from app.reports.preview import (
+    PreviewClassification,
+    PreviewContextError,
+    load_preview_context,
+    preview_classification,
+)
+from app.reports.schemas import (
+    PhotoReport,
+    ReportPlace,
+    TextReport,
+    TextReportSubmit,
+)
+from app.reports.service import (
+    MAX_IMAGE_BYTES,
+    RejectedReport,
+    inspect_image,
+    store_photo,
+    store_text,
+)
+from app.reports.storage import StorageError
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+classify_router = APIRouter(tags=["classify"])
 
 
 @router.post("/text", response_model=TextReport, status_code=201)
-def submit_text_report(
-    body: TextReportSubmit,
+def create_text_report(
+    submission: TextReportSubmit,
+    member: Member = Depends(current_member),
     db: Session = Depends(get_db),
-    member: MemberRow = Depends(current_member),
-) -> ReportRow:
-    """Stores a manual hazard report.
-
-    Opens a new hazard at the coordinate when no hazard id is given, or
-    attaches the report to the named open hazard. The submission's
-    severity is written onto the hazard.
+) -> TextReport:
+    """Stores a text report.
 
     Args:
-        body: The description, severity, and where it belongs.
+        submission: The text and where it belongs.
+        member: The signed-in member.
         db: Open database session.
-        member: The signed-in member who submitted it.
 
     Returns:
         The stored text report.
 
     Raises:
-        HTTPException: The named hazard is missing or already resolved.
+        HTTPException: The hazard cannot take the report.
     """
-    hazard = _resolve_hazard(body, db)
-    report = ReportRow(
-        kind=ReportKind.TEXT,
-        hazard_id=hazard.id,
-        member_id=member.id,
-        hazard_type=body.hazard_type,
-        category=body.category,
-        description=body.description,
-    )
-    db.add(report)
-    db.commit()
-    db.refresh(report)
-    return report
+    try:
+        return store_text(db, member, submission)
+    except RejectedReport as error:
+        raise _rejected(error) from error
 
 
-def _resolve_hazard(body: TextReportSubmit, db: Session) -> HazardRow:
-    """Finds the open hazard a report attaches to, or opens one.
+@router.post("/photo", response_model=PhotoReport, status_code=201)
+async def create_photo_report(
+    image: Annotated[UploadFile, File()],
+    latitude: Annotated[float | None, Form()] = None,
+    longitude: Annotated[float | None, Form()] = None,
+    hazard_id: Annotated[UUID | None, Form()] = None,
+    floor: Annotated[int | None, Form()] = None,
+    position_x: Annotated[float | None, Form()] = None,
+    position_y: Annotated[float | None, Form()] = None,
+    member: Member = Depends(current_member),
+    db: Session = Depends(get_db),
+) -> PhotoReport:
+    """Stores a photo report.
 
     Args:
-        body: The submission, carrying either a hazard id or a place.
+        image: The captured photo.
+        latitude: North-south coordinate of a new hazard.
+        longitude: East-west coordinate of a new hazard.
+        hazard_id: An open hazard to attach to.
+        floor: Floor the pin sits on. Omit for an outside hazard.
+        position_x: Normalized pin x on the floor plan.
+        position_y: Normalized pin y on the floor plan.
+        member: The signed-in member.
         db: Open database session.
 
     Returns:
-        The hazard the report will reference. A newly opened hazard is
-        flushed so its id is available.
+        The stored photo report.
 
     Raises:
-        HTTPException: The named hazard is missing or already resolved.
+        HTTPException: The photo or the hazard was rejected, or storage
+            is unavailable.
     """
-    if body.hazard_id is not None:
-        hazard = db.get(HazardRow, body.hazard_id)
-        if hazard is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Hazard was not found.",
-            )
-        if hazard.status is not HazardStatus.OPEN:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Hazard is already resolved.",
-            )
-        return hazard
-    hazard = HazardRow(
-        latitude=body.latitude,
-        longitude=body.longitude,
-        floor=body.floor,
-        position_x=body.position_x,
-        position_y=body.position_y,
-        status=HazardStatus.OPEN,
-        severity_score=body.severity_score,
+    place = _place(
+        latitude,
+        longitude,
+        hazard_id,
+        floor,
+        position_x,
+        position_y,
     )
-    db.add(hazard)
-    db.flush()
-    return hazard
+    raw = await image.read(MAX_IMAGE_BYTES + 1)
+    try:
+        return store_photo(db, member, raw, place)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+    except StorageError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Storage is unavailable.",
+        ) from error
+
+
+@classify_router.post("/classify", response_model=PreviewClassification)
+async def classify_photo(
+    image: Annotated[UploadFile, File()],
+    context: Annotated[str | None, Form()] = None,
+    member: Member = Depends(current_member),
+) -> PreviewClassification:
+    """Classifies a photo without storing a report.
+
+    Args:
+        image: The captured photo.
+        context: JSON spatial context, when the pin is on a floor plan.
+        member: The signed-in member.
+
+    Returns:
+        A display type, a 1–10 severity, and a short description.
+
+    Raises:
+        HTTPException: The photo, the context, or the vision call was
+            rejected.
+    """
+    raw = await image.read(MAX_IMAGE_BYTES + 1)
+    try:
+        inspected = inspect_image(raw)
+        parsed = load_preview_context(context)
+        classification = classify(raw, inspected.media_type)
+    except RejectedReport as error:
+        raise _rejected(error) from error
+    except PreviewContextError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except ClassificationError as error:
+        raise HTTPException(
+            status_code=422,
+            detail="The photo could not be classified.",
+        ) from error
+    return preview_classification(classification, parsed)
+
+
+def _place(
+    latitude: float | None,
+    longitude: float | None,
+    hazard_id: UUID | None,
+    floor: int | None,
+    position_x: float | None,
+    position_y: float | None,
+) -> ReportPlace:
+    """Validates where a photo belongs.
+
+    Args:
+        latitude: North-south coordinate of a new hazard.
+        longitude: East-west coordinate of a new hazard.
+        hazard_id: An open hazard to attach to.
+        floor: Floor the pin sits on. Omit for an outside hazard.
+        position_x: Normalized pin x on the floor plan.
+        position_y: Normalized pin y on the floor plan.
+
+    Returns:
+        The validated place.
+
+    Raises:
+        HTTPException: The place is incomplete or out of range.
+    """
+    try:
+        return ReportPlace.model_validate(
+            {
+                "latitude": latitude,
+                "longitude": longitude,
+                "hazard_id": hazard_id,
+                "floor": floor,
+                "position_x": position_x,
+                "position_y": position_y,
+            },
+        )
+    except ValidationError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=error.errors(),
+        ) from error
+
+
+def _rejected(error: RejectedReport) -> HTTPException:
+    """Maps a rejected submission to an HTTP error.
+
+    Args:
+        error: The rejection from the report service.
+
+    Returns:
+        The HTTP error the route raises.
+    """
+    return HTTPException(status_code=error.status_code, detail=error.detail)

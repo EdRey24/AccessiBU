@@ -16,6 +16,8 @@ from app.hazards.models import HazardStatus
 from app.hazards.schemas import Hazard
 from app.members.deps import current_member
 from app.members.models import Member as MemberRow
+from app.reports.schemas import Report
+from app.reports.service import RejectedReport, list_reports, report_body
 
 router = APIRouter(prefix="/hazards", tags=["hazards"])
 
@@ -68,3 +70,32 @@ def read_hazard(
             detail="Hazard was not found.",
         )
     return hazard
+
+
+@router.get("/{hazard_id}/reports", response_model=list[Report])
+def read_hazard_reports(
+    hazard_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _member: MemberRow = Depends(current_member),
+) -> list[Report]:
+    """Lists the reports that describe one hazard.
+
+    Args:
+        hazard_id: The hazard whose reports to load.
+        db: Open database session.
+        _member: The signed-in member. Reading requires a session.
+
+    Returns:
+        Reports in the order they were stored.
+
+    Raises:
+        HTTPException: No hazard has that id.
+    """
+    try:
+        rows = list_reports(db, hazard_id)
+    except RejectedReport as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=error.detail,
+        ) from error
+    return [report_body(row) for row in rows]

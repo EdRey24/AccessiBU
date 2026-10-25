@@ -194,6 +194,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
           uri: photoUri,
           latitude: resolved.coordinate.latitude,
           longitude: resolved.coordinate.longitude,
+          floor,
+          position,
         });
         addHazard({
           id: stored.hazardId,

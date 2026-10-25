@@ -6,10 +6,9 @@
  * back from the hazard, because the photo report does not carry it.
  */
 
-import { Platform } from 'react-native';
-
 import type { StoredHazardType } from '@/constants/hazards';
 import { ApiError, apiFetch, apiUrl } from '@/services/api';
+import { appendPhoto } from '@/services/photo-form';
 
 const STORED_HAZARD_TYPES: readonly StoredHazardType[] = [
   'spill',
@@ -44,13 +43,20 @@ export async function submitPhotoReport(input: {
   uri: string;
   latitude: number;
   longitude: number;
+  floor?: number | null;
+  position?: { x: number; y: number } | null;
 }): Promise<StoredPhotoReport> {
   if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
 
   const form = new FormData();
-  await appendImage(form, input.uri);
+  await appendPhoto(form, input.uri);
   form.append('latitude', String(input.latitude));
   form.append('longitude', String(input.longitude));
+  if (input.floor != null) form.append('floor', String(input.floor));
+  if (input.position) {
+    form.append('position_x', String(input.position.x));
+    form.append('position_y', String(input.position.y));
+  }
 
   const response = await apiFetch('/reports/photo', { method: 'POST', body: form });
   if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
@@ -74,23 +80,6 @@ export async function submitPhotoReport(input: {
 /** Maps a stored 0–100 score onto the 1–10 pin color scale. */
 export function pinSeverity(score: number): number {
   return Math.max(1, Math.min(10, Math.round(score / 10)));
-}
-
-async function appendImage(form: FormData, uri: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    if (!response.ok) throw new ApiError(0, 'The photo could not be read.');
-    const blob = await response.blob();
-    const type = blob.type || 'image/jpeg';
-    const extension = type.includes('png') ? 'png' : type.includes('heic') ? 'heic' : 'jpg';
-    form.append('image', new File([blob], `hazard.${extension}`, { type }));
-    return;
-  }
-  const lower = uri.toLowerCase();
-  const extension = lower.endsWith('.png') ? 'png' : lower.endsWith('.heic') ? 'heic' : 'jpg';
-  const type =
-    extension === 'png' ? 'image/png' : extension === 'heic' ? 'image/heic' : 'image/jpeg';
-  form.append('image', { uri, name: `hazard.${extension}`, type } as unknown as Blob);
 }
 
 async function readSeverity(hazardId: string): Promise<number | null> {
