@@ -244,7 +244,7 @@ function FloorPickerSheet({
 function severityLabel(hazard: Hazard): string {
   if (hazard.hazardType) {
     return hazard.severityScore != null
-      ? `severity ${hazard.severityScore}/100`
+      ? `severity ${hazard.severityScore}/10`
       : 'severity stored on the hazard';
   }
   return `severity ${hazard.severity}/10`;

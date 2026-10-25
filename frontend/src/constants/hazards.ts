@@ -58,7 +58,7 @@ export type Hazard = {
   id: string;
   type: HazardType;
   severity: number; // 1-10, used for pin color
-  /** Passage interference from the stored hazard, 0–100. */
+  /** Passage interference from the stored hazard, 1–10. */
   severityScore?: number | null;
   /** Hazard type written by classification, when this pin was stored. */
   hazardType?: StoredHazardType | null;

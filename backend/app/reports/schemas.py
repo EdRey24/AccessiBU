@@ -34,7 +34,7 @@ class Classification(BaseModel):
 
     hazard_type: HazardType
     category: int
-    severity_score: int = Field(ge=0, le=100)
+    severity_score: int = Field(ge=1, le=10)
     summary: str = Field(min_length=1)
 
 
@@ -106,7 +106,7 @@ class TextReportCreate(BaseModel):
     hazard_type: HazardType
     category: int
     description: str = Field(min_length=1)
-    severity_score: int = Field(ge=0, le=100)
+    severity_score: int = Field(ge=1, le=10)
 
     @field_validator("description")
     @classmethod
@@ -296,7 +296,7 @@ class OwnReport(BaseModel):
         text: What the member wrote, or the photo summary.
         has_photo: Whether the report has a photo.
         hazard_status: open or resolved.
-        severity_score: Severity stored on the hazard, 0 through 100.
+        severity_score: Severity stored on the hazard, 1 through 10.
         latitude: North-south coordinate of the hazard.
         longitude: East-west coordinate of the hazard.
         floor: Floor the hazard sits on, or None.

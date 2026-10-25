@@ -11,6 +11,7 @@ import httpx
 from app.reports.classify import (
     PROMPT,
     ClassificationError,
+    NotAHazard,
     classify,
     parse_classification,
     request_classification,
@@ -19,9 +20,10 @@ from app.reports.models import HazardType
 from app.reports.schemas import Classification
 
 _VALID = {
+    "is_hazard": True,
     "hazard_type": "blockage",
     "category": 4,
-    "severity_score": 100,
+    "severity_score": 10,
     "summary": "A door is blocked.",
 }
 
@@ -35,15 +37,35 @@ class ParseClassificationTests(unittest.TestCase):
         self.assertIsInstance(result, Classification)
         self.assertEqual(result.hazard_type, HazardType.BLOCKAGE)
         self.assertEqual(result.category, 4)
-        self.assertEqual(result.severity_score, 100)
+        self.assertEqual(result.severity_score, 10)
         self.assertEqual(result.summary, "A door is blocked.")
 
-        clear = dict(_VALID)
-        clear["severity_score"] = 0
-        clear["category"] = -3
-        parsed = parse_classification(clear)
-        self.assertEqual(parsed.severity_score, 0)
+        odd = dict(_VALID)
+        odd["category"] = -3
+        parsed = parse_classification(odd)
         self.assertEqual(parsed.category, -3)
+
+    def test_refuses_when_the_photo_is_not_a_hazard(self) -> None:
+        """is_hazard false is a refusal, with or without other fields."""
+        with self.assertRaises(NotAHazard):
+            parse_classification({"is_hazard": False})
+        payload = dict(_VALID)
+        payload["is_hazard"] = False
+        with self.assertRaises(NotAHazard):
+            parse_classification(payload)
+
+    def test_rejects_a_missing_or_non_boolean_flag(self) -> None:
+        """A classification needs a boolean is_hazard flag."""
+        missing = dict(_VALID)
+        del missing["is_hazard"]
+        with self.assertRaises(ClassificationError):
+            parse_classification(missing)
+        for flag in ("false", 0, None):
+            with self.subTest(flag=flag):
+                payload = dict(_VALID)
+                payload["is_hazard"] = flag
+                with self.assertRaises(ClassificationError):
+                    parse_classification(payload)
 
     def test_rejects_unknown_hazard_type(self) -> None:
         """An unknown hazard type is a classification error."""
@@ -52,10 +74,17 @@ class ParseClassificationTests(unittest.TestCase):
         with self.assertRaises(ClassificationError):
             parse_classification(payload)
 
-    def test_rejects_score_of_101(self) -> None:
-        """A severity score of 101 is a classification error."""
+    def test_rejects_score_of_11(self) -> None:
+        """A severity score of 11 is a classification error."""
         payload = dict(_VALID)
-        payload["severity_score"] = 101
+        payload["severity_score"] = 11
+        with self.assertRaises(ClassificationError):
+            parse_classification(payload)
+
+    def test_rejects_score_of_zero(self) -> None:
+        """A clear-path score of 0 is not a classification."""
+        payload = dict(_VALID)
+        payload["severity_score"] = 0
         with self.assertRaises(ClassificationError):
             parse_classification(payload)
 
@@ -137,7 +166,7 @@ class ClassifyTests(unittest.TestCase):
                 request.assert_called_once()
                 self.assertEqual(result.hazard_type, HazardType.BLOCKAGE)
                 self.assertEqual(result.category, 4)
-                self.assertEqual(result.severity_score, 100)
+                self.assertEqual(result.severity_score, 10)
                 self.assertEqual(result.summary, "A door is blocked.")
 
     def test_request_raises_classification_error(self) -> None:
@@ -155,6 +184,23 @@ class ClassifyTests(unittest.TestCase):
         ):
             with self.assertRaises(ClassificationError):
                 classify(b"photo", "image/jpeg")
+
+    def test_refusal_is_not_a_classification_error(self) -> None:
+        """A refusal stays a NotAHazard instead of a failed call."""
+
+        def fake_request(
+            image: bytes,
+            media_type: str,
+            description: str | None = None,
+        ) -> str:
+            return json.dumps({"is_hazard": False})
+
+        with mock.patch(
+            "app.reports.classify.request_classification",
+            fake_request,
+        ):
+            with self.assertRaises(NotAHazard):
+                classify(b"photo", "image/jpeg", "this dude")
 
     def test_request_returns_non_json(self) -> None:
         """Non-JSON request text is a classification error."""
@@ -264,10 +310,8 @@ class ClassifyTests(unittest.TestCase):
         content = body["messages"][0]["content"]
         text = content[0]["text"]
         self.assertIn("Cart in the doorway", text)
-        self.assertIn(
-            "from the photo and this description together",
-            text,
-        )
+        self.assertIn("follow the photo", text)
+        self.assertIn("may sharpen", text)
 
     def test_http_failure_and_empty_body(self) -> None:
         """A timeout or an empty body is a classification error."""

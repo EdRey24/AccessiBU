@@ -1,7 +1,8 @@
 """The one vision call for a photo.
 
-The call returns a classification. It does not store a report, upload
-an object, or send an alert.
+The call returns a classification, or refuses when the photo does not
+show a hazard. It does not store a report, upload an object, or send
+an alert.
 """
 
 import base64
@@ -21,26 +22,46 @@ _ACCEPTED_MEDIA_TYPES = frozenset(
 _REQUIRED = frozenset(
     {"hazard_type", "category", "severity_score", "summary"}
 )
+NOT_A_HAZARD = "not_a_hazard"
 PROMPT = (
-    "Classify the attached campus photo. "
-    "Return a JSON object with exactly these keys and no others: "
-    "hazard_type, category, severity_score, summary. "
+    "Decide whether the attached photo shows a hazard. "
+    "A hazard is a physical condition that interferes with "
+    "passage, including a person or object blocking the way. "
+    "People who are not in the way are not a hazard. "
+    "A clear path is not a hazard. "
+    "A sign, a screen, or a written claim is not a hazard "
+    "unless the condition itself is clearly visible. "
+    "Anything unclear is not a hazard. "
+    "When the photo is not a hazard, return a JSON object "
+    "with exactly this key and no others: is_hazard. "
+    "Set is_hazard to false. "
+    "When the photo clearly shows a hazard, return a JSON "
+    "object with exactly these keys and no others: "
+    "is_hazard, hazard_type, category, severity_score, summary. "
+    "Set is_hazard to true. "
     "hazard_type must be one of spill, blockage, elevator, "
     "entrance, walking_surface, other. "
+    "other is a clear physical condition that fits none of "
+    "those five kinds. "
     "category must be an integer. It names the specific "
     "condition within that hazard type. This prompt is the only "
     "definition of the number: choose any whole number that "
     "identifies the condition, and use the same number when the "
     "condition is the same. The number is not a severity. "
-    "severity_score must be an integer from 0 through 100. "
+    "severity_score must be an integer from 1 through 10. "
     "It is how much the condition interferes with passage. "
-    "0 means a clear path and 100 means fully blocked. "
-    "summary must be a short non-empty sentence about the photo."
+    "1 means barely in the way and 10 means fully blocked. "
+    "summary must be a short non-empty sentence about the "
+    "condition in the photo."
 )
 
 
 class ClassificationError(Exception):
     """The vision call did not return a Classification."""
+
+
+class NotAHazard(Exception):
+    """The photo does not show a hazard."""
 
 
 def classify(
@@ -53,8 +74,8 @@ def classify(
     Args:
         image: Raw image bytes.
         media_type: image/jpeg, image/png, or image/heic.
-        description: What the member wrote about the hazard. The type
-            and severity come from this text and the photo together.
+        description: What the member wrote. It may sharpen a hazard
+            the photo already shows. It cannot invent or hide one.
 
     Returns:
         The classification from the model.
@@ -62,6 +83,7 @@ def classify(
     Raises:
         ClassificationError: The media type is unsupported, the vision
             call failed, or the model output was not a classification.
+        NotAHazard: The model reported that the photo shows no hazard.
     """
     if media_type not in _ACCEPTED_MEDIA_TYPES:
         raise ClassificationError("Unsupported media type.")
@@ -84,23 +106,34 @@ def parse_classification(payload: object) -> Classification:
     """Parses a model object into a classification.
 
     Args:
-        payload: Object with hazard_type, category, severity_score,
-            and summary.
+        payload: Object with is_hazard, and, when that flag is true,
+            hazard_type, category, severity_score, and summary.
 
     Returns:
         The classification.
 
     Raises:
         ClassificationError: The object is not a classification.
+        NotAHazard: is_hazard is false.
     """
-    if not isinstance(payload, dict) or not _REQUIRED.issubset(payload):
+    if not isinstance(payload, dict):
+        raise ClassificationError(
+            "The vision call did not return a Classification."
+        )
+    if not isinstance(payload.get("is_hazard"), bool):
+        raise ClassificationError(
+            "The vision call did not return a Classification."
+        )
+    if not payload["is_hazard"]:
+        raise NotAHazard(NOT_A_HAZARD)
+    if not _REQUIRED.issubset(payload):
         raise ClassificationError(
             "The vision call did not return a Classification."
         )
     hazard_type = _hazard_type(payload["hazard_type"])
     category = _integer(payload["category"])
     severity_score = _integer(payload["severity_score"])
-    if severity_score < 0 or severity_score > 100:
+    if severity_score < 1 or severity_score > 10:
         raise ClassificationError(
             "The vision call did not return a Classification."
         )
@@ -199,8 +232,14 @@ def _prompt(description: str | None) -> str:
         return PROMPT
     return (
         f"{PROMPT} The member wrote this description: {note} "
-        "Choose hazard_type and severity_score from the photo and "
-        "this description together."
+        "The photo decides whether this is a hazard. "
+        "The description cannot make a hazard out of a photo "
+        "that does not show one, and it cannot hide a hazard "
+        "the photo clearly shows. "
+        "When the description names a different condition, "
+        "hazard_type and severity_score follow the photo. "
+        "When it describes the same condition, it may sharpen "
+        "hazard_type and severity_score."
     )
 
 

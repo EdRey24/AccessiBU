@@ -18,9 +18,9 @@ import { useHazards } from '@/hooks/use-hazards';
 
 /**
  * Threshold for "high severity", matching the critical band already used by
- * `severityColor` (pin >= 8). The stored score is 0–100, the pin value 1–10.
+ * `severityColor` (8 and above on the 1–10 scale).
  */
-export const HIGH_SEVERITY_SCORE = 80;
+export const HIGH_SEVERITY_SCORE = 8;
 export const HIGH_SEVERITY_PIN = 8;
 
 /** How often to re-pull the shared list so new reports actually arrive. */

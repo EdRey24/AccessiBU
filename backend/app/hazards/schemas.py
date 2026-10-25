@@ -25,7 +25,7 @@ class Hazard(BaseModel):
         floor: Floor value the hazard sits on, or None (outside / no plan).
         status: open or resolved.
         created_at: When the hazard was stored.
-        severity_score: Passage interference from 0 through 100.
+        severity_score: Passage interference from 1 through 10.
         summary: The sentence to show for this hazard. A photo report
             contributes the model summary. A text report contributes
             what the member wrote. None when the hazard has no report.
@@ -39,7 +39,7 @@ class Hazard(BaseModel):
     floor: int | None = None
     status: HazardStatus
     created_at: datetime
-    severity_score: int = Field(ge=0, le=100)
+    severity_score: int = Field(ge=1, le=10)
     summary: str | None = None
 
     # Backing columns (excluded from output; surfaced via `position` below).

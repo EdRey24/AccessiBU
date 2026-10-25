@@ -36,7 +36,7 @@ def admin(client: TestClient) -> TestClient:
     return client
 
 
-def _report(client: TestClient, severity: int = 60) -> str:
+def _report(client: TestClient, severity: int = 6) -> str:
     """Opens a hazard with a text report.
 
     Args:
@@ -93,7 +93,7 @@ def test_admin_lists_hazards_with_type_and_count(admin: TestClient) -> None:
             "hazard_type": "elevator",
             "category": 3,
             "description": "Still out",
-            "severity_score": 70,
+            "severity_score": 7,
         },
     )
     listed = admin.get("/admin/hazards")
@@ -103,14 +103,14 @@ def test_admin_lists_hazards_with_type_and_count(admin: TestClient) -> None:
     assert row["hazard_type"] == "elevator"
     assert row["report_count"] == 2
     assert row["summary"] == "Still out"
-    assert row["severity_score"] == 70
+    assert row["severity_score"] == 7
     assert row["resolved_at"] is None
 
 
 def test_resolve_marks_the_hazard_and_filters(admin: TestClient) -> None:
     """A resolve closes the hazard and the status filter finds it."""
     open_id = _report(admin)
-    resolved_id = _report(admin, severity=20)
+    resolved_id = _report(admin, severity=2)
 
     response = admin.post(f"/admin/hazards/{resolved_id}/resolve")
     assert response.status_code == 200
@@ -178,7 +178,7 @@ def test_reopened_hazard_takes_reports_again(admin: TestClient) -> None:
             "hazard_type": "elevator",
             "category": 3,
             "description": "Out again",
-            "severity_score": 90,
+            "severity_score": 9,
         },
     )
     assert response.status_code == 201
@@ -195,7 +195,7 @@ def test_resolved_hazard_takes_no_new_report(admin: TestClient) -> None:
             "hazard_type": "elevator",
             "category": 3,
             "description": "Out again",
-            "severity_score": 90,
+            "severity_score": 9,
         },
     )
     assert response.status_code == 409
@@ -222,7 +222,7 @@ def test_delete_hides_the_hazard_everywhere(admin: TestClient) -> None:
             "hazard_type": "elevator",
             "category": 3,
             "description": "Late report",
-            "severity_score": 10,
+            "severity_score": 1,
         },
     )
     assert attach.status_code == 404

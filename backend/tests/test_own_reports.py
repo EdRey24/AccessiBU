@@ -45,7 +45,7 @@ def _vision(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda image, media_type, description=None: Classification(
             hazard_type=HazardType.BLOCKAGE,
             category=14,
-            severity_score=80,
+            severity_score=8,
             summary="A cart blocks the east entrance.",
         ),
     )
@@ -109,7 +109,7 @@ def _text_report(client: TestClient, **extra: object) -> dict:
         "hazard_type": "spill",
         "category": 2,
         "description": "Wet floor by the door",
-        "severity_score": 40,
+        "severity_score": 4,
         **extra,
     }
     response = client.post("/reports/text", json=body)
@@ -211,10 +211,10 @@ def test_photo_report_text_edit_changes_its_summary(
 
 def test_edit_does_not_change_severity_or_status(client: TestClient) -> None:
     """An edit leaves the severity and status alone."""
-    report = _text_report(client, severity_score=55)
+    report = _text_report(client, severity_score=6)
     client.patch(f"/reports/{report['id']}", json={"description": "Updated"})
     hazard = client.get(f"/hazards/{report['hazard_id']}").json()
-    assert hazard["severity_score"] == 55
+    assert hazard["severity_score"] == 6
     assert hazard["status"] == "open"
 
 
@@ -361,7 +361,7 @@ def test_shared_hazard_location_cannot_be_moved(
             "hazard_type": "spill",
             "category": 2,
             "description": "I saw it too",
-            "severity_score": 50,
+            "severity_score": 5,
         },
     )
     assert other.status_code == 201
@@ -438,7 +438,7 @@ def test_deleting_one_of_two_reports_keeps_the_hazard(
             "hazard_type": "spill",
             "category": 2,
             "description": "I saw it too",
-            "severity_score": 50,
+            "severity_score": 5,
         },
     ).json()
 

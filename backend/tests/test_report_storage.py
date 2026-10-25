@@ -23,7 +23,7 @@ def _classification() -> Classification:
     return Classification(
         hazard_type=HazardType.BLOCKAGE,
         category=14,
-        severity_score=80,
+        severity_score=8,
         summary="A cart blocks the east entrance.",
     )
 
@@ -37,7 +37,7 @@ def test_text_report_opens_a_hazard(client: TestClient) -> None:
             "hazard_type": "spill",
             "category": 2,
             "description": "  Wet floor by the door  ",
-            "severity_score": 40,
+            "severity_score": 4,
         },
     )
     assert response.status_code == 201
@@ -49,7 +49,7 @@ def test_text_report_opens_a_hazard(client: TestClient) -> None:
 
     hazard = client.get(f"/hazards/{hazard_id}")
     assert hazard.status_code == 200
-    assert hazard.json()["severity_score"] == 40
+    assert hazard.json()["severity_score"] == 4
     assert hazard.json()["status"] == "open"
     assert hazard.json()["summary"] == "Wet floor by the door"
 
@@ -67,7 +67,7 @@ def test_text_report_stores_the_pin(client: TestClient) -> None:
             "hazard_type": "spill",
             "category": 2,
             "description": "Wet floor by the stair",
-            "severity_score": 40,
+            "severity_score": 4,
             "floor": 2,
             "position_x": 0.25,
             "position_y": 0.75,
@@ -88,7 +88,7 @@ def test_text_report_requires_a_place(client: TestClient) -> None:
             "hazard_type": "spill",
             "category": 2,
             "description": "Wet floor",
-            "severity_score": 40,
+            "severity_score": 4,
         },
     )
     assert response.status_code == 422
@@ -103,7 +103,7 @@ def test_second_report_replaces_severity(client: TestClient) -> None:
             "hazard_type": "spill",
             "category": 2,
             "description": "Wet floor",
-            "severity_score": 90,
+            "severity_score": 9,
         },
     )
     hazard_id = opened.json()["hazard_id"]
@@ -114,12 +114,12 @@ def test_second_report_replaces_severity(client: TestClient) -> None:
             "hazard_type": "spill",
             "category": 2,
             "description": "Mostly dry",
-            "severity_score": 15,
+            "severity_score": 5,
         },
     )
     assert attached.status_code == 201
     hazard = client.get(f"/hazards/{hazard_id}")
-    assert hazard.json()["severity_score"] == 15
+    assert hazard.json()["severity_score"] == 5
     reports = client.get(f"/hazards/{hazard_id}/reports")
     assert len(reports.json()) == 2
 
@@ -138,7 +138,7 @@ def test_resolved_hazard_rejects_a_report(
             "hazard_type": "entrance",
             "category": 1,
             "description": "Door stuck",
-            "severity_score": 70,
+            "severity_score": 7,
         },
     )
     hazard_id = uuid.UUID(opened.json()["hazard_id"])
@@ -154,7 +154,7 @@ def test_resolved_hazard_rejects_a_report(
             "hazard_type": "entrance",
             "category": 1,
             "description": "Still stuck",
-            "severity_score": 70,
+            "severity_score": 7,
         },
     )
     assert response.status_code == 409
@@ -184,7 +184,7 @@ def test_photo_report_stores_the_classification(
     assert body["image_path"] in objects
     assert objects[body["image_path"]][1] == "image/jpeg"
     hazard = client.get(f"/hazards/{body['hazard_id']}")
-    assert hazard.json()["severity_score"] == 80
+    assert hazard.json()["severity_score"] == 8
     assert hazard.json()["summary"] == "A cart blocks the east entrance."
     listed = client.get("/hazards")
     assert listed.json()[0]["summary"] == "A cart blocks the east entrance."
@@ -220,7 +220,7 @@ def test_hazard_without_a_photo_has_no_image(client: TestClient) -> None:
             "hazard_type": "spill",
             "category": 2,
             "description": "Wet floor by the door",
-            "severity_score": 40,
+            "severity_score": 4,
         },
     )
     assert stored.status_code == 201
@@ -266,7 +266,7 @@ def test_photo_report_keeps_the_member_type_and_severity(
     )
     response = client.post(
         "/reports/photo",
-        data={**PLACE, "hazard_type": "spill", "severity_score": "40"},
+        data={**PLACE, "hazard_type": "spill", "severity_score": "4"},
         files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
     )
     assert response.status_code == 201
@@ -275,7 +275,7 @@ def test_photo_report_keeps_the_member_type_and_severity(
     assert body["category"] == 14
     assert body["summary"] == "A cart blocks the east entrance."
     hazard = client.get(f"/hazards/{body['hazard_id']}")
-    assert hazard.json()["severity_score"] == 40
+    assert hazard.json()["severity_score"] == 4
 
 
 def test_unclassified_photo_skips_the_vision_call(
@@ -296,7 +296,7 @@ def test_unclassified_photo_skips_the_vision_call(
             **PLACE,
             "classify": "false",
             "hazard_type": "spill",
-            "severity_score": "60",
+            "severity_score": "6",
             "category": "1",
             "description": "  Coffee spilled by the stairs.  ",
         },
@@ -309,7 +309,7 @@ def test_unclassified_photo_skips_the_vision_call(
     assert body["summary"] == "Coffee spilled by the stairs."
     assert body["image_path"] in objects
     hazard = client.get(f"/hazards/{body['hazard_id']}")
-    assert hazard.json()["severity_score"] == 60
+    assert hazard.json()["severity_score"] == 6
 
 
 def test_unclassified_photo_needs_the_member_values(
@@ -396,6 +396,33 @@ def test_failed_classification_deletes_the_object(
         files={"image": ("hazard.jpg", JPEG, "image/jpeg")},
     )
     assert response.status_code == 422
+    assert objects == {}
+    assert client.get("/hazards").json() == []
+
+
+def test_refused_photo_deletes_the_object(
+    client: TestClient,
+    objects: dict[str, tuple[bytes, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A photo that is not a hazard leaves no object and no report."""
+    from app.reports.classify import NotAHazard
+
+    def refuse(
+        image: bytes,
+        media_type: str,
+        description: str | None = None,
+    ) -> Classification:
+        raise NotAHazard("not_a_hazard")
+
+    monkeypatch.setattr("app.reports.service._classify", refuse)
+    response = client.post(
+        "/reports/photo",
+        data={**PLACE, "description": "this dude"},
+        files={"image": ("people.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "not_a_hazard"
     assert objects == {}
     assert client.get("/hazards").json() == []
 

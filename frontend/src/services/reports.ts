@@ -50,7 +50,7 @@ export async function submitPhotoReport(input: {
   description?: string | null;
   /** Type the member confirmed after the preview. */
   hazardType?: StoredHazardType | null;
-  /** Passage interference the member confirmed, from 0 through 100. */
+  /** Passage interference the member confirmed, from 1 through 10. */
   severityScore?: number | null;
   /**
    * False stores the photo as a plain attachment: no vision call, and the
@@ -98,9 +98,9 @@ export async function submitPhotoReport(input: {
   };
 }
 
-/** Maps a stored 0–100 score onto the 1–10 pin color scale. */
+/** Keeps a stored severity on the 1–10 pin color scale. */
 export function pinSeverity(score: number): number {
-  return Math.max(1, Math.min(10, Math.round(score / 10)));
+  return Math.max(1, Math.min(10, Math.round(score)));
 }
 
 async function readSeverity(hazardId: string): Promise<number | null> {
@@ -110,7 +110,7 @@ async function readSeverity(hazardId: string): Promise<number | null> {
     const body: unknown = await response.json();
     if (!body || typeof body !== 'object' || !('severity_score' in body)) return null;
     const score = (body as { severity_score: unknown }).severity_score;
-    if (typeof score !== 'number' || score < 0 || score > 100) return null;
+    if (typeof score !== 'number' || score < 1 || score > 10) return null;
     return score;
   } catch {
     // The photo report is already stored. A missing score should not fail it.

@@ -91,8 +91,15 @@ function detailMessage(detail: unknown): string | null {
   return parts.length > 0 ? parts.join(' ') : null;
 }
 
+const NOT_A_HAZARD = 'not_a_hazard';
+const NOT_A_HAZARD_MESSAGE =
+  "This photo doesn't show a hazard. Try another photo or change the description.";
+
 /** Sentence to show for a failed call. Hides raw browser errors. */
 export function failureMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.message.trim() === NOT_A_HAZARD) {
+    return NOT_A_HAZARD_MESSAGE;
+  }
   if (error instanceof ApiError && error.message.trim().length > 0) return error.message;
   return fallback;
 }

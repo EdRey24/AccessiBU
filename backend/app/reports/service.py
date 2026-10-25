@@ -21,7 +21,12 @@ from app.reports.schemas import (
     TextReport,
     TextReportSubmit,
 )
-from app.reports.storage import StorageError, delete_object, get_object, put_object
+from app.reports.storage import (
+    StorageError,
+    delete_object,
+    get_object,
+    put_object,
+)
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -130,7 +135,7 @@ def store_photo(
         hazard_type: Type the member confirmed. Replaces the vision
             type when present. The vision summary stays.
         severity_score: Passage interference the member confirmed,
-            from 0 through 100. Replaces the vision score when present.
+            from 1 through 10. Replaces the vision score when present.
         manual: The member's own type, severity, and summary for a photo
             that is not classified.
 
@@ -139,7 +144,7 @@ def store_photo(
 
     Raises:
         RejectedReport: The image, the hazard, or the vision call was
-            rejected.
+            rejected. A photo that shows no hazard is refused.
         StorageError: The object could not be uploaded.
     """
     inspected = inspect_image(image)
@@ -170,6 +175,10 @@ def store_photo(
     except Exception as error:
         db.rollback()
         _discard(path)
+        if _not_a_hazard(error):
+            from app.reports.classify import NOT_A_HAZARD
+
+            raise RejectedReport(422, NOT_A_HAZARD) from error
         if _classification_failed(error):
             raise RejectedReport(
                 422,
@@ -336,6 +345,22 @@ def _classify(
     from app.reports.classify import classify
 
     return classify(image, media_type, description)
+
+
+def _not_a_hazard(error: Exception) -> bool:
+    """Reports whether the vision call refused the photo.
+
+    Args:
+        error: The error raised while storing the photo.
+
+    Returns:
+        True when the photo does not show a hazard.
+    """
+    try:
+        from app.reports.classify import NotAHazard
+    except ImportError:
+        return False
+    return isinstance(error, NotAHazard)
 
 
 def _classification_failed(error: Exception) -> bool:
