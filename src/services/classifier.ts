@@ -19,17 +19,10 @@
  *     "description": "Liquid spill beside the north stair — high slip risk.",
  *     "reason": "Within 0.04 of a staircase."   // optional explanation
  *   }
- *
- * If EXPO_PUBLIC_API_URL is unset, a local mock stands in so the app stays
- * demoable end-to-end. A configured API never falls back to the mock.
  */
 
-import {
-  type HazardType,
-  type SpatialContext,
-  proximityToFeatures,
-} from '@/constants/hazards';
-import { apiFetch, apiUrl } from '@/services/api';
+import { type HazardType, type SpatialContext } from '@/constants/hazards';
+import { ApiError, apiFetch, apiUrl } from '@/services/api';
 import { appendPhoto } from '@/services/photo-form';
 
 export type ClassifierResult = {
@@ -39,15 +32,13 @@ export type ClassifierResult = {
   locationBonus: number;
   description: string;
   reason: string;
-  /** True when this came from the real backend, false for the local mock. */
-  fromBackend: boolean;
 };
 
 export async function classifyHazard(
   photoUri: string | null,
   context: SpatialContext
 ): Promise<ClassifierResult> {
-  if (!apiUrl) return mockClassify(photoUri, context);
+  if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
   if (!photoUri) throw new Error('A photo is required.');
   return callBackend(photoUri, context);
 }
@@ -67,49 +58,7 @@ async function callBackend(photoUri: string, context: SpatialContext): Promise<C
     locationBonus: data.locationBonus ?? 0,
     description: data.description ?? '',
     reason: data.reason ?? '',
-    fromBackend: true,
   };
-}
-
-/** Local stand-in mirroring the backend's expected behavior. */
-function mockClassify(photoUri: string | null, context: SpatialContext): Promise<ClassifierResult> {
-  const samples: { type: HazardType; base: number; description: string }[] = [
-    { type: 'Spill', base: 5, description: 'Liquid spill detected — slip risk in a walking path.' },
-    { type: 'Wet floor', base: 3, description: 'Wet floor surface detected; proceed with caution.' },
-    { type: 'Blocked path', base: 6, description: 'Obstruction blocking an accessible route.' },
-    { type: 'Debris', base: 4, description: 'Loose debris detected on the ground.' },
-    { type: 'Broken elevator', base: 8, description: 'Elevator appears out of service — accessibility impact.' },
-    { type: 'Lighting out', base: 3, description: 'Low lighting / outage detected in this area.' },
-  ];
-  const seed = (photoUri ?? 'manual').length;
-  const pick = samples[seed % samples.length];
-
-  // Apply the same location-aware logic the backend would, using the context.
-  const prox = proximityToFeatures(context.floor, context.pin);
-  let bonus = 0;
-  let reason = 'Open area — standard severity.';
-  if (prox.nearest) {
-    if (prox.distance <= 0.06) {
-      bonus = 3;
-      reason = `Directly beside ${prox.nearest.label.toLowerCase()} — critical egress hazard.`;
-    } else if (prox.distance <= 0.12) {
-      bonus = 2;
-      reason = `Close to ${prox.nearest.label.toLowerCase()} — elevated risk.`;
-    } else if (prox.distance <= 0.22) {
-      bonus = 1;
-      reason = `Near ${prox.nearest.label.toLowerCase()}.`;
-    }
-  }
-  const result: ClassifierResult = {
-    type: pick.type,
-    baseSeverity: pick.base,
-    locationBonus: bonus,
-    severity: clamp(pick.base + bonus),
-    description: pick.description,
-    reason,
-    fromBackend: false,
-  };
-  return new Promise((resolve) => setTimeout(() => resolve(result), 1200));
 }
 
 function clamp(n: number): number {

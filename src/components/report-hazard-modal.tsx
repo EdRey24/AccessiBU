@@ -65,7 +65,6 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     locationBonus: number;
     description: string;
     reason: string;
-    fromBackend: boolean;
   } | null>(null);
 
   // Manual-report fields (editable only when there's no photo/model result).
@@ -138,11 +137,13 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     const inside = gps ? isAtCDS(gps) : location === 'inside';
     if (!position || (nextFloor === 2 && inside)) return;
     setAnalyzing(true);
+    setSubmitError(null);
     try {
       const ctx = buildSpatialContext(nextFloor, position, gps);
       setResult(await classifyHazard(uri, ctx));
-    } catch {
+    } catch (error) {
       setResult(null);
+      setSubmitError(error instanceof Error ? error.message : 'The photo could not be classified.');
     } finally {
       setAnalyzing(false);
     }
@@ -421,7 +422,17 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                     setPosition(p);
                     if (isPhoto && photoUri && floor !== 2) {
                       const ctx = buildSpatialContext(floor, p, coords);
-                      classifyHazard(photoUri, ctx).then(setResult).catch(() => setResult(null));
+                      setSubmitError(null);
+                      classifyHazard(photoUri, ctx)
+                        .then(setResult)
+                        .catch((error: unknown) => {
+                          setResult(null);
+                          setSubmitError(
+                            error instanceof Error
+                              ? error.message
+                              : 'The photo could not be classified.',
+                          );
+                        });
                     }
                   }}
                   showFeatures
