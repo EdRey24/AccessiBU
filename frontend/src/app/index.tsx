@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CampusMap } from '@/components/campus-map';
 import { FloorPlanView } from '@/components/floor-plan-view';
+import { MyReportsModal } from '@/components/my-reports-modal';
 import { ReportHazardModal } from '@/components/report-hazard-modal';
 import { ThemedText } from '@/components/themed-text';
 import { CDS_FLOORS, floorLabel, storedHazardLabel, type Hazard } from '@/constants/hazards';
@@ -26,6 +27,7 @@ export default function HomeScreen() {
   const { hazards, refresh, loading, error } = useHazards();
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [reportOpen, setReportOpen] = useState(false);
+  const [myReportsOpen, setMyReportsOpen] = useState(false);
   const [floorPickerOpen, setFloorPickerOpen] = useState(false);
   const [detail, setDetail] = useState<Hazard | null>(null);
 
@@ -58,6 +60,13 @@ export default function HomeScreen() {
               </ThemedText>
             </Pressable>
           ) : null}
+          <Pressable
+            style={[styles.alertsBtn, { borderColor: theme.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="My reports"
+            onPress={() => setMyReportsOpen(true)}>
+            <ThemedText type="small">My reports</ThemedText>
+          </Pressable>
           <Pressable
             style={[styles.alertsBtn, { borderColor: theme.border }]}
             accessibilityRole="button"
@@ -141,6 +150,9 @@ export default function HomeScreen() {
 
       {/* Report flow */}
       <ReportHazardModal visible={reportOpen} onClose={() => setReportOpen(false)} />
+
+      {/* The member's own reports: edit or delete */}
+      <MyReportsModal visible={myReportsOpen} onClose={() => setMyReportsOpen(false)} />
 
       {/* Floor picker (tap building -> choose a floor) */}
       <FloorPickerSheet

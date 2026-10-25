@@ -41,6 +41,8 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "dev": "node ../scripts/dev.mjs",
+    "go": "expo start --go",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
