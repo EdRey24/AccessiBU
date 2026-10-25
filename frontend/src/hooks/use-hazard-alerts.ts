@@ -47,9 +47,11 @@ export type HazardAlerts = {
 export function useHazardAlerts(): HazardAlerts {
   const { hazards, refresh } = useHazards();
 
-  // Ids the user has already been shown. `null` means no baseline yet, which
-  // happens before the first load and again after the list is cleared.
-  const [seenIds, setSeenIds] = useState<Set<string> | null>(null);
+  // High-severity hazards already present when this session started looking.
+  // `null` means "not seeded yet", which is also the signed-out state.
+  const [baseline, setBaseline] = useState<ReadonlySet<string> | null>(null);
+  // Alerts the user has explicitly acknowledged by opening the list.
+  const [acknowledged, setAcknowledged] = useState<ReadonlySet<string>>(() => new Set());
 
   const alerts = useMemo(
     () => hazards.filter(isHighSeverity).sort((a, b) => b.createdAt - a.createdAt),
@@ -65,23 +67,36 @@ export function useHazardAlerts(): HazardAlerts {
     return () => clearInterval(timer);
   }, [refresh]);
 
-  // Seed the baseline on the first populated list, and drop it on sign-out so
-  // the next account does not inherit this one's "new" set.
+  // Seed the baseline off the first populated list, and drop it when the list
+  // empties so one account never inherits another's "new" set. The state write
+  // is pushed past the current render the same way the shared hazard store
+  // defers its own, which keeps this off the cascading-render path.
   useEffect(() => {
-    if (hazards.length === 0) {
-      setSeenIds(null);
-      return;
-    }
-    setSeenIds((prev) => prev ?? new Set(alerts.map((h) => h.id)));
+    let active = true;
+    void (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      if (hazards.length === 0) {
+        setBaseline((prev) => (prev === null ? prev : null));
+      } else {
+        setBaseline((prev) => (prev === null ? new Set(alerts.map((h) => h.id)) : prev));
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, [hazards.length, alerts]);
 
   const unseen = useMemo(
-    () => (seenIds === null ? [] : alerts.filter((h) => !seenIds.has(h.id))),
-    [alerts, seenIds],
+    () =>
+      baseline === null
+        ? []
+        : alerts.filter((h) => !baseline.has(h.id) && !acknowledged.has(h.id)),
+    [alerts, baseline, acknowledged],
   );
 
   const markAllSeen = useCallback(() => {
-    setSeenIds(new Set(alerts.map((h) => h.id)));
+    setAcknowledged(new Set(alerts.map((h) => h.id)));
   }, [alerts]);
 
   return { alerts, unseen, unseenCount: unseen.length, markAllSeen };

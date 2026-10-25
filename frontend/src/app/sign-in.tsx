@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -75,7 +76,8 @@ export default function SignInScreen() {
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.center}>
+        style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.center} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <ThemedText type="subtitle" style={styles.brand}>
             AccessiBU
@@ -165,6 +167,7 @@ export default function SignInScreen() {
             </Pressable>
           )}
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -172,7 +175,8 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', padding: Spacing.four },
+  flex: { flex: 1 },
+  center: { flexGrow: 1, justifyContent: 'center', padding: Spacing.four },
   card: { width: '100%', maxWidth: 420, alignSelf: 'center', gap: Spacing.two },
   brand: { color: BU.red, fontSize: 32, lineHeight: 38, fontWeight: '800' },
   heading: { marginTop: Spacing.three, marginBottom: Spacing.two },

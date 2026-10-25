@@ -32,7 +32,9 @@ export function HazardAlertToast({ alerts, onPress }: HazardAlertToastProps) {
   // Ids already announced, so a hazard that stays unacknowledged (and so stays
   // in `alerts`) does not toast again on every poll.
   const announced = useRef<Set<string>>(new Set());
-  const slide = useRef(new Animated.Value(0)).current;
+  // Held in state rather than a ref: the value is read during render (it feeds
+  // the animated style), and it is created once and never replaced.
+  const [slide] = useState(() => new Animated.Value(0));
 
   // Queue anything that has not been announced yet, newest first.
   useEffect(() => {

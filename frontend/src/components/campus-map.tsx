@@ -1,14 +1,32 @@
-import Mapbox, { Camera, LocationPuck, MapView, MarkerView } from '@rnmapbox/maps';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { Hazard } from '@/constants/hazards';
-import { CDS_LOCATION, MAPBOX_TOKEN } from '@/constants/hazards';
-import { BU, Spacing } from '@/constants/theme';
+import { CDS_LOCATION, MAPBOX_TOKEN, storedHazardLabel } from '@/constants/hazards';
+import { BU, severityColor, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from './themed-text';
 
-Mapbox.setAccessToken(MAPBOX_TOKEN);
+type MapboxModule = typeof import('@rnmapbox/maps');
+
+/**
+ * @rnmapbox/maps needs custom native code. Expo Go does not include it, and
+ * importing the package there throws. Load it defensively so the app still
+ * opens in Expo Go and shows a fallback instead of crashing at startup.
+ */
+function loadMapbox(): MapboxModule | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const loaded = require('@rnmapbox/maps') as MapboxModule;
+    loaded.default.setAccessToken(MAPBOX_TOKEN);
+    return loaded;
+  } catch {
+    return null;
+  }
+}
+
+const mapbox = loadMapbox();
 
 type CampusMapProps = {
   hazards: Hazard[];
@@ -20,12 +38,25 @@ type CampusMapProps = {
 const CHIP_MIN_ZOOM = 15.5;
 
 /**
+ * The campus map. Uses the real 3D Mapbox map in a development build, and a
+ * plain list in Expo Go where the native map is not available.
+ */
+export function CampusMap(props: CampusMapProps) {
+  if (!mapbox) return <MapUnavailable {...props} />;
+  return <NativeCampusMap {...props} mapbox={mapbox} />;
+}
+
+/**
  * Real 3D campus map (Mapbox GL). A CDS hazard-count chip is shown as a marker
  * only when zoomed in past CHIP_MIN_ZOOM and hidden as you zoom out — no stem
  * or floating pin that mis-marks at distance. Individual hazard pins drill into
  * the 2D floor plan when tapped.
  */
-export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusMapProps) {
+function NativeCampusMap({
+  hazards,
+  onSelectBuilding,
+  mapbox: { default: Mapbox, Camera, LocationPuck, MapView, MarkerView },
+}: CampusMapProps & { mapbox: MapboxModule }) {
   const insideHazards = hazards.filter((h) => h.location === 'inside');
   const count = insideHazards.length;
   const [zoom, setZoom] = useState(16.8);
@@ -35,7 +66,7 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
     Mapbox.setTelemetryEnabled(false);
     // Request location so the live-location puck can render.
     Mapbox.requestAndroidLocationPermissions?.();
-  }, []);
+  }, [Mapbox]);
 
   return (
     <View style={styles.container}>
@@ -86,8 +117,73 @@ export function CampusMap({ hazards, onSelectBuilding, onSelectHazard }: CampusM
   );
 }
 
+/** Stand-in for the map when the native Mapbox module is not available. */
+function MapUnavailable({ hazards, onSelectBuilding, onSelectHazard }: CampusMapProps) {
+  const theme = useTheme();
+  const insideHazards = hazards.filter((h) => h.location === 'inside');
+  const count = insideHazards.length;
+
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.fallback}
+      accessibilityLabel="Campus hazards">
+      <View style={[styles.notice, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+        <ThemedText type="smallBold">The 3D campus map is not available here</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Expo Go does not include the map. Open a development build to see it. You can still view
+          and report hazards on the floor plan.
+        </ThemedText>
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Data Sciences Center, ${count} active hazard${count === 1 ? '' : 's'}. Open the floor plans.`}
+        onPress={onSelectBuilding}
+        style={styles.chip}>
+        <ThemedText type="smallBold" style={styles.chipTitle}>
+          CDS floor plans
+        </ThemedText>
+        <ThemedText type="small" style={styles.chipCount}>
+          {count} {count === 1 ? 'hazard' : 'hazards'}
+        </ThemedText>
+      </Pressable>
+
+      {insideHazards.map((hazard) => (
+        <Pressable
+          key={hazard.id}
+          accessibilityRole="button"
+          accessibilityLabel={`${hazard.hazardType ? storedHazardLabel(hazard.hazardType) : hazard.type}, severity ${hazard.severity} of 10`}
+          onPress={() => onSelectHazard(hazard)}
+          style={[styles.hazardRow, { borderColor: theme.border }]}>
+          <View style={[styles.pin, { backgroundColor: severityColor(hazard.severity) }]}>
+            <ThemedText type="smallBold" style={styles.pinText}>
+              {hazard.severity}
+            </ThemedText>
+          </View>
+          <View style={styles.hazardBody}>
+            <ThemedText type="smallBold">
+              {hazard.hazardType ? storedHazardLabel(hazard.hazardType) : hazard.type}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+              {hazard.description}
+            </ThemedText>
+          </View>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  fallback: { padding: Spacing.three, gap: Spacing.two },
+  notice: {
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
   chip: {
     backgroundColor: '#fff',
     borderRadius: Spacing.three,
@@ -105,6 +201,15 @@ const styles = StyleSheet.create({
   },
   chipTitle: { color: BU.red },
   chipCount: { color: '#1A1A1A' },
+  hazardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+  },
+  hazardBody: { flex: 1, gap: 2 },
   pin: {
     minWidth: 28,
     height: 28,

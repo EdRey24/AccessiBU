@@ -2,11 +2,13 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppHeader } from '@/components/app-header';
 import { CampusMap } from '@/components/campus-map';
 import { FloorPlanView } from '@/components/floor-plan-view';
 import { HazardAlertToast } from '@/components/hazard-alert-toast';
+import { MyReportsModal } from '@/components/my-reports-modal';
 import { NotificationsSheet } from '@/components/notifications-sheet';
 import { ReportHazardModal } from '@/components/report-hazard-modal';
 import { ThemedText } from '@/components/themed-text';
@@ -25,11 +27,13 @@ type Screen = { kind: 'map' } | { kind: 'floor'; floor: number };
 export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { member, signOut } = useSession();
   const { hazards, refresh, loading, error } = useHazards();
   const { alerts, unseen, unseenCount, markAllSeen } = useHazardAlerts();
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [reportOpen, setReportOpen] = useState(false);
+  const [myReportsOpen, setMyReportsOpen] = useState(false);
   const [floorPickerOpen, setFloorPickerOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [detail, setDetail] = useState<Hazard | null>(null);
@@ -41,64 +45,22 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <ThemedText type="subtitle" style={styles.brand}>
-            AccessiBU
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Boston University
-          </ThemedText>
-        </View>
-        <View style={styles.headerRight}>
-          <ThemedText type="small" themeColor="textSecondary">
-            {hazards.length} active
-          </ThemedText>
-          {member?.role === 'admin' ? (
-            <Pressable
-              style={[styles.alertsBtn, { borderColor: BU.red }]}
-              accessibilityRole="button"
-              accessibilityLabel="Open the Facilities dashboard"
-              onPress={() => router.push('/facilities')}>
-              <ThemedText type="small" style={{ color: BU.red }}>
-                Facilities
-              </ThemedText>
-            </Pressable>
-          ) : null}
-          <Pressable
-            style={[styles.alertsBtn, { borderColor: theme.border }]}
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-            onPress={() => {
-              void signOut();
-            }}>
-            <ThemedText type="small">Sign out</ThemedText>
-          </Pressable>
-          <Pressable
-            style={[styles.alertsBtn, { borderColor: unseenCount > 0 ? BU.red : theme.border }]}
-            accessibilityRole="button"
-            accessibilityLabel={
-              unseenCount > 0
-                ? `Alerts, ${unseenCount} new high-severity hazard${unseenCount === 1 ? '' : 's'}`
-                : 'Alerts'
-            }
-            onPress={() => {
-              setAlertNewIds(new Set(unseen.map((h) => h.id)));
-              setAlertsOpen(true);
-              markAllSeen();
-            }}>
-            <ThemedText type="small">🔔</ThemedText>
-            {unseenCount > 0 ? (
-              <View style={styles.badge}>
-                <ThemedText type="small" style={styles.badgeText}>
-                  {unseenCount}
-                </ThemedText>
-              </View>
-            ) : null}
-          </Pressable>
-        </View>
-      </View>
+      {/* Header: inline actions on wide screens, a menu on phones */}
+      <AppHeader
+        activeCount={hazards.length}
+        isAdmin={member?.role === 'admin'}
+        alertCount={unseenCount}
+        onAlerts={() => {
+          setAlertNewIds(new Set(unseen.map((h) => h.id)));
+          setAlertsOpen(true);
+          markAllSeen();
+        }}
+        onMyReports={() => setMyReportsOpen(true)}
+        onFacilities={() => router.push('/facilities')}
+        onSignOut={() => {
+          void signOut();
+        }}
+      />
 
       {/* Main view: 3D map or 2D floor plan */}
       <View style={styles.main}>
@@ -116,13 +78,18 @@ export default function HomeScreen() {
             floor={screen.floor}
             hazards={hazards}
             onBack={() => setScreen({ kind: 'map' })}
+            onChangeFloor={() => setFloorPickerOpen(true)}
             onSelectHazard={(h) => setDetail(h)}
           />
         )}
       </View>
 
-      {/* Bottom bar */}
-      <View style={[styles.bottomBar, { borderColor: theme.border }]}>
+      {/* Bottom bar. Padded above the phone's gesture bar. */}
+      <View
+        style={[
+          styles.bottomBar,
+          { borderColor: theme.border, paddingBottom: Math.max(insets.bottom, Spacing.three) },
+        ]}>
         <Pressable
           style={styles.reportsSummary}
           accessibilityRole="button"
@@ -166,6 +133,9 @@ export default function HomeScreen() {
       {/* Report flow */}
       <ReportHazardModal visible={reportOpen} onClose={() => setReportOpen(false)} />
 
+      {/* The member's own reports: edit or delete */}
+      <MyReportsModal visible={myReportsOpen} onClose={() => setMyReportsOpen(false)} />
+
       {/* Floor picker (tap building -> choose a floor) */}
       <FloorPickerSheet
         visible={floorPickerOpen}
@@ -175,6 +145,7 @@ export default function HomeScreen() {
           setScreen({ kind: 'floor', floor });
         }}
         hazards={hazards}
+        current={screen.kind === 'floor' ? screen.floor : null}
       />
 
       {/* Auto-appearing banner for newly reported high-severity hazards */}
@@ -211,11 +182,14 @@ function FloorPickerSheet({
   onClose,
   onPick,
   hazards,
+  current,
 }: {
   visible: boolean;
   onClose: () => void;
   onPick: (floor: number) => void;
   hazards: Hazard[];
+  /** The floor being viewed, if any. It is marked in the list. */
+  current: number | null;
 }) {
   const theme = useTheme();
   return (
@@ -239,9 +213,18 @@ function FloorPickerSheet({
               return (
                 <Pressable
                   key={f.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: f.value === current }}
                   onPress={() => onPick(f.value)}
-                  style={[styles.floorRow, { borderColor: theme.border }]}>
-                  <ThemedText type="default">{floorLabel(f.value)}</ThemedText>
+                  style={[
+                    styles.floorRow,
+                    { borderColor: f.value === current ? BU.red : theme.border },
+                    f.value === current && styles.floorRowCurrent,
+                  ]}>
+                  <ThemedText type={f.value === current ? 'smallBold' : 'default'}>
+                    {floorLabel(f.value)}
+                    {f.value === current ? '  (viewing)' : ''}
+                  </ThemedText>
                   <ThemedText
                     type="small"
                     themeColor={count === 0 ? 'textSecondary' : undefined}
@@ -309,7 +292,7 @@ function HazardDetailSheet({
 
   return (
     <Modal visible={!!hazard} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.detailBackdrop} onPress={onClose}>
         {hazard && (
           <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
             <ScrollView style={styles.detailScroll} contentContainerStyle={styles.detailBody}>
@@ -369,60 +352,48 @@ function HazardDetailSheet({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.three,
-  },
-  brand: { color: BU.red, fontSize: 28, lineHeight: 32, fontWeight: '800' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  badge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: BU.red,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  alertsBtn: {
-    borderWidth: 1,
-    borderRadius: Spacing.five,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
+
   main: { flex: 1 },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
     borderTopWidth: 1,
   },
-  reportsSummary: { flex: 1, gap: 2 },
+  // minWidth 0 lets this text wrap instead of pushing the button off screen.
+  reportsSummary: { flex: 1, minWidth: 0, gap: 2 },
   reportsHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   loadError: { color: BU.red },
   fab: {
+    flexShrink: 0,
+    minHeight: 48,
+    justifyContent: 'center',
     backgroundColor: BU.red,
     borderRadius: Spacing.five,
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   fabText: { color: '#fff' },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  detailBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.four,
   },
   sheet: {
+    width: '100%',
+    maxWidth: 560,
     borderTopLeftRadius: Spacing.four,
     borderTopRightRadius: Spacing.four,
     maxHeight: '70%',
@@ -438,6 +409,7 @@ const styles = StyleSheet.create({
   },
   floorList: { gap: Spacing.two, paddingBottom: Spacing.three },
   floorCountActive: { color: BU.red, fontWeight: '700' },
+  floorRowCurrent: { borderWidth: 2 },
   floorRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -448,11 +420,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
   },
   detailCard: {
-    margin: Spacing.four,
+    width: '100%',
+    maxWidth: 560,
     borderRadius: Spacing.four,
     padding: Spacing.four,
     gap: Spacing.two,
-    marginBottom: Spacing.six,
     maxHeight: '80%',
   },
   detailScroll: { flexGrow: 0, maxHeight: 480 },
