@@ -43,6 +43,8 @@ export async function submitPhotoReport(input: {
   uri: string;
   latitude: number;
   longitude: number;
+  floor?: number | null;
+  position?: { x: number; y: number } | null;
 }): Promise<StoredPhotoReport> {
   if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
 
@@ -50,6 +52,11 @@ export async function submitPhotoReport(input: {
   await appendPhoto(form, input.uri);
   form.append('latitude', String(input.latitude));
   form.append('longitude', String(input.longitude));
+  if (input.floor != null) form.append('floor', String(input.floor));
+  if (input.position) {
+    form.append('position_x', String(input.position.x));
+    form.append('position_y', String(input.position.y));
+  }
 
   const response = await apiFetch('/reports/photo', { method: 'POST', body: form });
   if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
