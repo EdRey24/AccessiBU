@@ -18,7 +18,7 @@ type Screen = { kind: 'map' } | { kind: 'floor'; floor: number };
 export default function HomeScreen() {
   const theme = useTheme();
   const { signOut } = useSession();
-  const { hazards, refresh, loading } = useHazards();
+  const { hazards, refresh, loading, error } = useHazards();
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [reportOpen, setReportOpen] = useState(false);
   const [floorPickerOpen, setFloorPickerOpen] = useState(false);
@@ -100,11 +100,17 @@ export default function HomeScreen() {
               </ThemedText>
             )}
           </View>
-          <ThemedText type="small" themeColor="textSecondary">
-            {insideCount === 0
-              ? 'No active hazards reported. Tap to refresh.'
-              : `${insideCount} report${insideCount === 1 ? '' : 's'} on CDS. Tap to refresh.`}
-          </ThemedText>
+          {error ? (
+            <ThemedText type="small" style={styles.loadError} accessibilityRole="alert">
+              {error}
+            </ThemedText>
+          ) : (
+            <ThemedText type="small" themeColor="textSecondary">
+              {insideCount === 0
+                ? 'No active hazards reported. Tap to refresh.'
+                : `${insideCount} report${insideCount === 1 ? '' : 's'} on CDS. Tap to refresh.`}
+            </ThemedText>
+          )}
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -277,6 +283,7 @@ const styles = StyleSheet.create({
   },
   reportsSummary: { flex: 1, gap: 2 },
   reportsHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  loadError: { color: BU.red },
   fab: {
     backgroundColor: BU.red,
     borderRadius: Spacing.five,

@@ -62,17 +62,48 @@ function join(path: string): string {
   return `${apiUrl.replace(/\/$/, '')}${path}`;
 }
 
-async function errorDetail(response: Response): Promise<string> {
+/** Reads a member-facing message from a failed API response. */
+export async function errorDetail(response: Response): Promise<string> {
   try {
     const payload: unknown = await response.json();
     if (payload && typeof payload === 'object' && 'detail' in payload) {
-      const detail = (payload as { detail: unknown }).detail;
-      if (typeof detail === 'string' && detail.length > 0) return detail;
+      const message = detailMessage((payload as { detail: unknown }).detail);
+      if (message) return message;
     }
   } catch {
     // The body was empty or not JSON.
   }
   return `Request failed (${response.status}).`;
+}
+
+function detailMessage(detail: unknown): string | null {
+  if (typeof detail === 'string' && detail.trim().length > 0) return detail;
+  if (!Array.isArray(detail)) return null;
+  const parts = detail
+    .map((item) => {
+      if (typeof item === 'string') return item.trim();
+      if (item && typeof item === 'object' && 'msg' in item && typeof item.msg === 'string') {
+        return item.msg.trim();
+      }
+      return '';
+    })
+    .filter((part) => part.length > 0);
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
+/** Sentence to show for a failed call. Hides raw browser errors. */
+export function failureMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.message.trim().length > 0) return error.message;
+  return fallback;
+}
+
+async function send(path: string, init: RequestInit = {}): Promise<Response> {
+  if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
+  try {
+    return await fetch(join(path), init);
+  } catch {
+    throw new ApiError(0, 'Could not reach the server.');
+  }
 }
 
 async function doRefresh(): Promise<Session | null> {
@@ -81,29 +112,22 @@ async function doRefresh(): Promise<Session | null> {
     accessToken = null;
     return null;
   }
-  try {
-    const response = await fetch(join('/auth/refresh'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: stored }),
-    });
-    if (!response.ok) {
-      accessToken = null;
-      await clearRefreshToken();
-      publish(null);
-      return null;
-    }
-    const session = toSession((await response.json()) as MemberSessionBody);
-    accessToken = session.accessToken;
-    await writeRefreshToken(session.refreshToken);
-    publish(session);
-    return session;
-  } catch {
+  const response = await send('/auth/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: stored }),
+  });
+  if (!response.ok) {
     accessToken = null;
     await clearRefreshToken();
     publish(null);
     return null;
   }
+  const session = toSession((await response.json()) as MemberSessionBody);
+  accessToken = session.accessToken;
+  await writeRefreshToken(session.refreshToken);
+  publish(session);
+  return session;
 }
 
 /**
@@ -126,7 +150,7 @@ export async function apiFetch(path: string, init: ApiInit = {}): Promise<Respon
   const { retry, ...request } = init;
   const headers = new Headers(request.headers);
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  const response = await fetch(join(path), { ...request, headers });
+  const response = await send(path, { ...request, headers });
   if (response.status !== 401 || retry) return response;
   const session = await refreshSession();
   if (!session) throw new ApiError(401, 'Invalid or expired token.');
@@ -134,8 +158,7 @@ export async function apiFetch(path: string, init: ApiInit = {}): Promise<Respon
 }
 
 async function openSession(path: string, email: string, password: string): Promise<Session> {
-  if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
-  const response = await fetch(join(path), {
+  const response = await send(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -160,8 +183,7 @@ export function register(email: string, password: string): Promise<Session> {
 
 /** Asks for a reset mail. The reply does not say whether the address exists. */
 export async function forgotPassword(email: string): Promise<string> {
-  if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
-  const response = await fetch(join('/auth/forgot-password'), {
+  const response = await send('/auth/forgot-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -173,8 +195,7 @@ export async function forgotPassword(email: string): Promise<string> {
 
 /** Sets a new password with the token from a reset link. Does not sign in. */
 export async function resetPassword(token: string, password: string): Promise<void> {
-  if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
-  const response = await fetch(join('/auth/reset-password'), {
+  const response = await send('/auth/reset-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, password }),
@@ -186,11 +207,13 @@ export async function resetPassword(token: string, password: string): Promise<vo
 export async function signOut(): Promise<void> {
   try {
     if (accessToken && apiUrl) {
-      await fetch(join('/auth/logout'), {
+      await send('/auth/logout', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
     }
+  } catch {
+    // The device still forgets the session when the server cannot be reached.
   } finally {
     accessToken = null;
     await clearRefreshToken();

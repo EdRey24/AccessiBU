@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
     buildSpatialContext,
-    CDS_FLOORS,
     CDS_LOCATION,
     floorLabel,
     floorPlanImage,
@@ -28,7 +27,7 @@ import {
 import { BU, severityColor, Spacing } from '@/constants/theme';
 import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
-import { ApiError } from '@/services/api';
+import { failureMessage } from '@/services/api';
 import { classifyHazard } from '@/services/classifier';
 import { resolveFloor2Location } from '@/services/floor-geo';
 import { submitTextReport } from '@/services/hazards';
@@ -76,7 +75,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
   const [location, setLocation] = useState<HazardLocation>('inside');
   const [locStatus, setLocStatus] = useState<LocationStatus>('idle');
   const [coords, setCoords] = useState<Coords | null>(null);
-  const [floor, setFloor] = useState(12);
+  // Reporting is limited to the digitized Floor 2 plan.
+  const floor = 2;
   // Start with a center pin so the user just drags it to the exact spot.
   const [position, setPosition] = useState<{ x: number; y: number } | null>({ x: 0.5, y: 0.5 });
 
@@ -98,7 +98,6 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     setLocation('inside');
     setLocStatus('idle');
     setCoords(null);
-    setFloor(12);
     setPosition({ x: 0.5, y: 0.5 });
   };
 
@@ -145,7 +144,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
       setResult(await classifyHazard(uri, ctx));
     } catch (error) {
       setResult(null);
-      setSubmitError(error instanceof Error ? error.message : 'The photo could not be classified.');
+      setSubmitError(failureMessage(error, 'The photo could not be classified.'));
     } finally {
       setAnalyzing(false);
     }
@@ -217,9 +216,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
         });
         close();
       } catch (error) {
-        setSubmitError(
-          error instanceof ApiError ? error.message : 'The report could not be stored.',
-        );
+        setSubmitError(failureMessage(error, 'The report could not be stored.'));
       } finally {
         setSubmitting(false);
       }
@@ -268,9 +265,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
       });
       close();
     } catch (error) {
-      setSubmitError(
-        error instanceof ApiError ? error.message : 'The report could not be stored.',
-      );
+      setSubmitError(failureMessage(error, 'The report could not be stored.'));
     } finally {
       setSubmitting(false);
     }
@@ -424,23 +419,12 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               <>
                 <View style={styles.labelRow}>
                   <ThemedText type="smallBold" style={styles.label}>
-                    Floor{!isPhoto ? ' *' : ''}
+                    Floor
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {floorLabel(floor)}
                   </ThemedText>
                 </View>
-                <Dropdown
-                  value={floor}
-                  onChange={(value) => {
-                    setFloor(value);
-                    if (value === 2) {
-                      setResult(null);
-                      return;
-                    }
-                    if (isPhoto && photoUri && position) {
-                      void runClassifier(photoUri, coords, value);
-                    }
-                  }}
-                  options={CDS_FLOORS}
-                />
 
                 <View style={styles.labelRow}>
                   <ThemedText type="smallBold" style={styles.label}>
@@ -455,23 +439,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
                   floor={floor}
                   draftPin={position}
                   userDot={userDot}
-                  onPlace={(p) => {
-                    setPosition(p);
-                    if (isPhoto && photoUri && floor !== 2) {
-                      const ctx = buildSpatialContext(floor, p, coords);
-                      setSubmitError(null);
-                      classifyHazard(photoUri, ctx)
-                        .then(setResult)
-                        .catch((error: unknown) => {
-                          setResult(null);
-                          setSubmitError(
-                            error instanceof Error
-                              ? error.message
-                              : 'The photo could not be classified.',
-                          );
-                        });
-                    }
-                  }}
+                  onPlace={setPosition}
                   showFeatures
                   caption={floorLabel(floor)}
                 />
@@ -480,7 +448,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
           </ScrollView>
 
           {submitError ? (
-            <ThemedText type="small" style={styles.submitError}>
+            <ThemedText type="small" style={styles.submitError} accessibilityRole="alert">
               {submitError}
             </ThemedText>
           ) : null}

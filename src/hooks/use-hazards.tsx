@@ -10,6 +10,7 @@ import {
 
 import type { Hazard } from '@/constants/hazards';
 import { useSession } from '@/hooks/use-session';
+import { failureMessage } from '@/services/api';
 import { listHazards } from '@/services/hazards';
 
 type NewHazard = Omit<Hazard, 'id' | 'createdAt'> & {
@@ -25,6 +26,8 @@ type HazardStore = {
   refresh: () => Promise<void>;
   /** True while the first (or a manual) load is in flight. */
   loading: boolean;
+  /** Set when the last load failed. Null after a successful load. */
+  error: string | null;
 };
 
 const HazardContext = createContext<HazardStore | null>(null);
@@ -43,14 +46,16 @@ export function HazardProvider({ children }: { children: ReactNode }) {
   const { member } = useSession();
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const fetched = await listHazards();
       setHazards((prev) => mergeById(prev, fetched));
-    } catch {
-      // Keep whatever is already on screen if the sync fails.
+      setError(null);
+    } catch (caught) {
+      setError(failureMessage(caught, 'Hazards could not be loaded.'));
     } finally {
       setLoading(false);
     }
@@ -75,6 +80,7 @@ export function HazardProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       if (!member) {
         setHazards([]);
+        setError(null);
         return;
       }
       await load();
@@ -105,8 +111,8 @@ export function HazardProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ hazards, addHazard, removeHazard, refresh, loading }),
-    [hazards, addHazard, removeHazard, refresh, loading]
+    () => ({ hazards, addHazard, removeHazard, refresh, loading, error }),
+    [hazards, addHazard, removeHazard, refresh, loading, error]
   );
 
   return <HazardContext.Provider value={value}>{children}</HazardContext.Provider>;

@@ -13,7 +13,7 @@ import type {
     StoredHazardType,
 } from '@/constants/hazards';
 import { storedHazardLabel } from '@/constants/hazards';
-import { ApiError, apiFetch, apiUrl } from '@/services/api';
+import { ApiError, apiFetch, apiUrl, errorDetail } from '@/services/api';
 
 /** A hazard row as the backend returns it (GET /hazards). */
 type HazardBody = {
@@ -103,11 +103,10 @@ export type SubmittedHazard = {
 
 /** Lists every open hazard, mapped into the app's Hazard shape. */
 export async function listHazards(): Promise<Hazard[]> {
-  if (!apiUrl) return [];
   const response = await apiFetch('/hazards');
   if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
   const body: unknown = await response.json();
-  if (!Array.isArray(body)) return [];
+  if (!Array.isArray(body)) throw new ApiError(response.status, 'The hazard list could not be read.');
   return body
     .map(parseHazard)
     .filter((row): row is HazardBody => row !== null)
@@ -235,21 +234,3 @@ function parseTextReport(body: unknown): TextReportBody | null {
   };
 }
 
-async function errorDetail(response: Response): Promise<string> {
-  try {
-    const payload: unknown = await response.json();
-    if (payload && typeof payload === 'object' && 'detail' in payload) {
-      const detail = (payload as { detail: unknown }).detail;
-      if (typeof detail === 'string' && detail.length > 0) return detail;
-      if (Array.isArray(detail)) {
-        const first = detail.find(
-          (item) => item && typeof item === 'object' && 'msg' in item,
-        ) as { msg?: unknown } | undefined;
-        if (first && typeof first.msg === 'string' && first.msg.length > 0) return first.msg;
-      }
-    }
-  } catch {
-    // The body was empty or not JSON.
-  }
-  return `Request failed (${response.status}).`;
-}

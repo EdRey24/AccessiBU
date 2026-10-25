@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { BU, Spacing } from '@/constants/theme';
 import { useSession } from '@/hooks/use-session';
 import { useTheme } from '@/hooks/use-theme';
-import { ApiError } from '@/services/api';
+import { failureMessage } from '@/services/api';
 import { passwordError } from '@/services/credentials';
 
 function recoveryToken(): string | null {
@@ -43,7 +43,7 @@ export default function ResetPasswordScreen() {
       await resetPassword(token, password);
       router.replace('/sign-in');
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.');
+      setError(failureMessage(caught, 'Something went wrong. Try again.'));
       setBusy(false);
     }
   }

@@ -22,8 +22,17 @@
  */
 
 import { type HazardType, type SpatialContext } from '@/constants/hazards';
-import { ApiError, apiFetch, apiUrl } from '@/services/api';
+import { ApiError, apiFetch, apiUrl, errorDetail } from '@/services/api';
 import { appendPhoto } from '@/services/photo-form';
+
+type ClassifierPayload = {
+  type?: unknown;
+  severity?: unknown;
+  baseSeverity?: unknown;
+  locationBonus?: unknown;
+  description?: unknown;
+  reason?: unknown;
+};
 
 export type ClassifierResult = {
   type: HazardType;
@@ -39,7 +48,7 @@ export async function classifyHazard(
   context: SpatialContext
 ): Promise<ClassifierResult> {
   if (!apiUrl) throw new ApiError(0, 'The API address is not configured.');
-  if (!photoUri) throw new Error('A photo is required.');
+  if (!photoUri) throw new ApiError(0, 'A photo is required.');
   return callBackend(photoUri, context);
 }
 
@@ -49,15 +58,23 @@ async function callBackend(photoUri: string, context: SpatialContext): Promise<C
   form.append('context', JSON.stringify(context));
 
   const res = await apiFetch('/classify', { method: 'POST', body: form });
-  if (!res.ok) throw new Error(`classifier ${res.status}`);
-  const data = await res.json();
+  if (!res.ok) throw new ApiError(res.status, await errorDetail(res));
+  let data: ClassifierPayload;
+  try {
+    data = (await res.json()) as ClassifierPayload;
+  } catch {
+    throw new ApiError(res.status, 'The classification could not be read.');
+  }
+  if (typeof data.type !== 'string' || typeof data.severity !== 'number') {
+    throw new ApiError(res.status, 'The classification could not be read.');
+  }
   return {
-    type: data.type,
+    type: data.type as HazardType,
     severity: clamp(data.severity),
-    baseSeverity: clamp(data.baseSeverity ?? data.severity),
-    locationBonus: data.locationBonus ?? 0,
-    description: data.description ?? '',
-    reason: data.reason ?? '',
+    baseSeverity: clamp(typeof data.baseSeverity === 'number' ? data.baseSeverity : data.severity),
+    locationBonus: typeof data.locationBonus === 'number' ? data.locationBonus : 0,
+    description: typeof data.description === 'string' ? data.description : '',
+    reason: typeof data.reason === 'string' ? data.reason : '',
   };
 }
 
