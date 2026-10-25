@@ -14,10 +14,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
     buildSpatialContext,
+    CDS_FLOORS,
     floorLabel,
     floorPlanImage,
     gpsToPlanXY,
     HAZARD_TYPES,
+    planXYToGps,
     type Location as HazardLocation,
     type HazardType,
 } from '@/constants/hazards';
@@ -26,7 +28,7 @@ import { useHazards } from '@/hooks/use-hazards';
 import { useTheme } from '@/hooks/use-theme';
 import { failureMessage } from '@/services/api';
 import { classifyHazard } from '@/services/classifier';
-import { resolveFloor2Location } from '@/services/floor-geo';
+import { resolveFloor2Location, type ResolvedLocation } from '@/services/floor-geo';
 import {
     hazardCategory,
     severityScoreFromPin,
@@ -57,6 +59,27 @@ type Coords = { latitude: number; longitude: number; accuracy: number | null };
 type ReportMethod = 'photo' | 'manual';
 
 const DEFAULT_SEVERITY = 5;
+
+/** The AI photo flow is built on the digitized Floor 2 plan. */
+const PHOTO_FLOOR = 2;
+
+/** Floors a manual report can be filed on: Basement first, up to the top floor. */
+const MANUAL_FLOOR_OPTIONS = [...CDS_FLOORS]
+  .sort((a, b) => a.value - b.value)
+  .map((f) => ({ value: f.value, label: f.label }));
+
+/**
+ * Real-world location for a pin. Floor 2 uses its digitized room map; other
+ * floors have only the plan image, so the pin is interpolated over the
+ * building corners and has no room.
+ */
+function resolvePin(
+  floor: number,
+  pin: { x: number; y: number }
+): Pick<ResolvedLocation, 'room' | 'coordinate'> {
+  if (floor === PHOTO_FLOOR) return resolveFloor2Location(pin);
+  return { room: null, coordinate: planXYToGps(pin) };
+}
 
 export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) {
   const theme = useTheme();
@@ -90,8 +113,9 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
 
   const location: HazardLocation = 'inside';
   const [coords, setCoords] = useState<Coords | null>(null);
-  // Reporting is limited to the digitized Floor 2 plan.
-  const floor = 2;
+  // The photo flow stays on Floor 2. A manual report can pick any floor.
+  const [manualFloor, setManualFloor] = useState(PHOTO_FLOOR);
+  const floor = isPhoto ? PHOTO_FLOOR : manualFloor;
   // Start with a center pin so the user just drags it to the exact spot.
   const [position, setPosition] = useState<{ x: number; y: number } | null>({ x: 0.5, y: 0.5 });
 
@@ -116,6 +140,14 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     setSeverity(DEFAULT_SEVERITY);
     setDescription('');
     setCoords(null);
+    setManualFloor(PHOTO_FLOOR);
+    setPosition({ x: 0.5, y: 0.5 });
+  };
+
+  // A pin from one floor means nothing on another, so re-center it.
+  const chooseFloor = (next: number) => {
+    if (next === manualFloor) return;
+    setManualFloor(next);
     setPosition({ x: 0.5, y: 0.5 });
   };
 
@@ -190,6 +222,8 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     setPhotoUri(null);
     setHazardType('Spill');
     setSeverity(DEFAULT_SEVERITY);
+    if (manualFloor !== PHOTO_FLOOR) setPosition({ x: 0.5, y: 0.5 });
+    setManualFloor(PHOTO_FLOOR);
     if (next === 'photo') setCameraOpen(true);
     else void detectBuilding();
   };
@@ -211,7 +245,7 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
     if (!canSubmit || submitting || !position) return;
     if (isPhoto && (!photoUri || !result)) return;
     const spatialContext = buildSpatialContext(floor, position, coords);
-    const resolved = resolveFloor2Location(position);
+    const resolved = resolvePin(floor, position);
     const confirmedScore = severityScoreFromPin(severity);
 
     setSubmitting(true);
@@ -395,14 +429,23 @@ export function ReportHazardModal({ visible, onClose }: ReportHazardModalProps) 
               ]}
             />
 
-            <View style={styles.labelRow}>
-              <ThemedText type="smallBold" style={styles.label}>
-                Floor
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {floorLabel(floor)}
-              </ThemedText>
-            </View>
+            {isPhoto ? (
+              <View style={styles.labelRow}>
+                <ThemedText type="smallBold" style={styles.label}>
+                  Floor
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {floorLabel(floor)}
+                </ThemedText>
+              </View>
+            ) : (
+              <>
+                <ThemedText type="smallBold" style={styles.label}>
+                  Floor *
+                </ThemedText>
+                <Dropdown value={manualFloor} onChange={chooseFloor} options={MANUAL_FLOOR_OPTIONS} />
+              </>
+            )}
 
             <View style={styles.labelRow}>
               <ThemedText type="smallBold" style={styles.label}>
