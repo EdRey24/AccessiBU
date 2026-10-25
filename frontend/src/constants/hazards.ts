@@ -256,6 +256,24 @@ export const CDS_PLAN_CORNERS = {
 };
 
 /**
+ * Converts a normalized (0-1) pin on a floor-plan image to a lat/lng, by
+ * bilinear interpolation over CDS_PLAN_CORNERS. Used for floors without a
+ * digitized room map (every floor except 2, which has its own geometry).
+ */
+export function planXYToGps(pin: { x: number; y: number }): {
+  latitude: number;
+  longitude: number;
+} {
+  const c = CDS_PLAN_CORNERS;
+  const top = (k: 'latitude' | 'longitude') => lerp(c.topLeft[k], c.topRight[k], pin.x);
+  const bottom = (k: 'latitude' | 'longitude') => lerp(c.bottomLeft[k], c.bottomRight[k], pin.x);
+  return {
+    latitude: lerp(top('latitude'), bottom('latitude'), pin.y),
+    longitude: lerp(top('longitude'), bottom('longitude'), pin.y),
+  };
+}
+
+/**
  * Projects a GPS coordinate onto the floor-plan image as normalized (x, y) in
  * 0-1 space, using inverse bilinear interpolation over the four georeferenced
  * corners (handles a skewed/rotated building quad, not just an axis-aligned
